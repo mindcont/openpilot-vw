@@ -1,55 +1,64 @@
 #!/usr/bin/env python3
+# openpilot服务定义文件 - 定义系统中所有服务的配置参数
 from enum import IntEnum
 from typing import Optional
 
 
-# TODO: this should be automatically determined using the capnp schema
+# TODO: 这应该通过capnp schema自动确定
+# 队列大小枚举 - 定义不同类型数据的缓冲区大小
 class QueueSize(IntEnum):
-  BIG = 10 * 1024 * 1024      # 10MB - video frames, large AI outputs
-  MEDIUM = 2 * 1024 * 1024    # 2MB - high freq (CAN), livestream
-  SMALL = 250 * 1024          # 250KB - most services
+  BIG = 10 * 1024 * 1024      # 10MB - 视频帧，大型AI输出
+  MEDIUM = 2 * 1024 * 1024    # 2MB - 高频数据(CAN)，直播流
+  SMALL = 250 * 1024          # 250KB - 大多数服务
 
 
+# 服务类 - 封装每个服务的配置参数
 class Service:
   def __init__(self, should_log: bool, frequency: float, decimation: Optional[int] = None,
                queue_size: QueueSize = QueueSize.SMALL):
-    self.should_log = should_log
-    self.frequency = frequency
-    self.decimation = decimation
-    self.queue_size = queue_size
+    self.should_log = should_log      # 是否记录日志
+    self.frequency = frequency        # 服务频率(Hz)
+    self.decimation = decimation      # 抽取率(可选)
+    self.queue_size = queue_size      # 队列大小
 
 
+# 服务配置字典 - 定义所有系统服务及其参数
 _services: dict[str, tuple] = {
-  # service: (should_log, frequency, qlog decimation (optional))
-  # note: the "EncodeIdx" packets will still be in the log
-  "gyroscope": (True, 104., 104),
-  "accelerometer": (True, 104., 104),
-  "magnetometer": (True, 25.),
-  "lightSensor": (True, 100., 100),
-  "temperatureSensor": (True, 2., 200),
-  "gpsNMEA": (True, 9.),
-  "deviceState": (True, 2., 1),
-  "touch": (True, 20., 1),
-  "can": (True, 100., 2053, QueueSize.BIG),  # decimation gives ~3 msgs in a full segment
-  "controlsState": (True, 100., 10, QueueSize.MEDIUM),
-  "selfdriveState": (True, 100., 10),
-  "pandaStates": (True, 10., 1),
-  "peripheralState": (True, 2., 1),
-  "radarState": (True, 20., 5),
-  "roadEncodeIdx": (False, 20., 1),
-  "liveTracks": (True, 20.),
-  "sendcan": (True, 100., 139, QueueSize.MEDIUM),
+  # 服务名: (是否记录日志, 频率, qlog抽取率(可选), 队列大小(可选))
+  # 注意: "EncodeIdx"数据包仍会保留在日志中
+  # 传感器数据
+  "gyroscope": (True, 104., 104),           # 陀螺仪
+  "accelerometer": (True, 104., 104),       # 加速度计
+  "magnetometer": (True, 25.),              # 磁力计
+  "lightSensor": (True, 100., 100),         # 光线传感器
+  "temperatureSensor": (True, 2., 200),     # 温度传感器
+  # GPS和设备状态
+  "gpsNMEA": (True, 9.),                    # GPS NMEA数据
+  "deviceState": (True, 2., 1),             # 设备状态
+  "touch": (True, 20., 1),                  # 触摸事件
+  # 控制和通信
+  "can": (True, 100., 2053, QueueSize.BIG),        # CAN总线数据，抽取后完整段约3条消息
+  "controlsState": (True, 100., 10, QueueSize.MEDIUM),  # 控制状态
+  "selfdriveState": (True, 100., 10),               # 自动驾驶状态
+  "pandaStates": (True, 10., 1),                    # Panda设备状态
+  "peripheralState": (True, 2., 1),                 # 外设状态
+  # 感知和跟踪
+  "radarState": (True, 20., 5),                     # 雷达状态
+  "roadEncodeIdx": (False, 20., 1),                 # 道路编码索引
+  "liveTracks": (True, 20.),                        # 实时目标跟踪
+  "sendcan": (True, 100., 139, QueueSize.MEDIUM),  # 发送CAN数据
   "logMessage": (True, 0.),
   "errorLogMessage": (True, 0., 1),
   "liveCalibration": (True, 4., 4),
   "liveTorqueParameters": (True, 4., 1),
   "liveDelay": (True, 4., 1),
   "androidLog": (True, 0.),
-  "carState": (True, 100., 10),
-  "carControl": (True, 100., 10),
-  "carOutput": (True, 100., 10),
-  "longitudinalPlan": (True, 20., 10),
-  "driverAssistance": (True, 20., 20),
+  # 车辆控制
+  "carState": (True, 100., 10),                     # 车辆状态
+  "carControl": (True, 100., 10),                   # 车辆控制指令
+  "carOutput": (True, 100., 10),                    # 车辆输出
+  "longitudinalPlan": (True, 20., 10),              # 纵向规划
+  "driverAssistance": (True, 20., 20),              # 驾驶辅助
   "procLog": (True, 0.5, 15, QueueSize.BIG),
   "gpsLocationExternal": (True, 10., 10),
   "gpsLocation": (True, 1., 1),
@@ -71,8 +80,9 @@ _services: dict[str, tuple] = {
   "driverMonitoringState": (True, 20., 10),
   "wideRoadEncodeIdx": (False, 20., 1),
   "wideRoadCameraState": (True, 20., 20),
-  "drivingModelData": (True, 20., 10),
-  "modelV2": (True, 20., None, QueueSize.BIG),
+  # AI模型数据
+  "drivingModelData": (True, 20., 10),              # 驾驶模型数据
+  "modelV2": (True, 20., None, QueueSize.BIG),      # 模型V2输出
   "managerState": (True, 2., 1),
   "uploaderState": (True, 0., 1),
   "navInstruction": (True, 1., 10),
@@ -89,8 +99,8 @@ _services: dict[str, tuple] = {
   "wideRoadEncodeData": (False, 20., None, QueueSize.BIG),
   "qRoadEncodeData": (False, 20., None, QueueSize.BIG),
 
-  # debug
-  "uiDebug": (True, 0., 1),
+  # 调试服务
+  "uiDebug": (True, 0., 1),                         # UI调试信息
   "testJoystick": (True, 0.),
   "alertDebug": (True, 20., 5),
   "livestreamWideRoadEncodeIdx": (False, 20.),
@@ -103,10 +113,12 @@ _services: dict[str, tuple] = {
   "customReservedRawData1": (True, 0.),
   "customReservedRawData2": (True, 0.),
 }
+# 将服务配置转换为Service对象字典
 SERVICE_LIST = {name: Service(*vals) for
                 idx, (name, vals) in enumerate(_services.items())}
 
 
+# 生成C++头文件的函数
 def build_header():
   h = ""
   h += "/* THIS IS AN AUTOGENERATED FILE, PLEASE EDIT services.py */\n"
@@ -116,8 +128,10 @@ def build_header():
   h += "#include <map>\n"
   h += "#include <string>\n"
 
+  # 定义C++服务结构体和映射
   h += "struct service { std::string name; bool should_log; float frequency; int decimation; size_t queue_size; };\n"
   h += "static std::map<std::string, service> services = {\n"
+  # 遍历所有服务并生成C++代码
   for k, v in SERVICE_LIST.items():
     should_log = "true" if v.should_log else "false"
     decimation = -1 if v.decimation is None else v.decimation
