@@ -292,6 +292,11 @@ void Replay::publishMessage(const Event *e) {
 
 // 发布视频帧
 void Replay::publishFrame(const Event *e) {
+  // 如果启用了外部视频模式，跳过内置视频帧发布
+  if (hasFlag(REPLAY_FLAG_NO_VIPC)) {
+    return;  // 外部视频模式或禁用视频输出
+  }
+  
   CameraType cam;
   
   // 根据事件类型确定相机类型

@@ -48,6 +48,7 @@ Options:
       --qcam         加载qcamera
       --no-hw-decoder 禁用硬件视频解码
       --no-vipc      不输出视频
+      --video-external 使用外部视频流（禁用内置视频）
       --all          输出所有消息，包括 bookmarkButton, uiDebug, userBookmark
   -h, --help         显示此帮助信息
 )";
@@ -61,6 +62,7 @@ struct ReplayConfig {
   std::string prefix;                   // openpilot前缀路径
   uint32_t flags = REPLAY_FLAG_NONE;    // 回放标志位
   bool auto_source = false;             // 是否自动选择数据源
+  bool external_video = false;          // 使用外部视频流
   int start_seconds = 0;                // 开始播放的秒数
   int cache_segments = -1;              // 缓存段数（-1表示使用默认值）
   float playback_speed = -1;            // 播放速度（-1表示使用默认值）
@@ -86,6 +88,7 @@ bool parseArgs(int argc, char *argv[], ReplayConfig &config) {
       {"qcam", no_argument, nullptr, 0},                    // qcamera
       {"no-hw-decoder", no_argument, nullptr, 0},           // 禁用硬件解码
       {"no-vipc", no_argument, nullptr, 0},                 // 禁用视频输出
+      {"video-external", no_argument, nullptr, 0},          // 外部视频模式
       {"all", no_argument, nullptr, 0},                     // 输出所有消息
       {"help", no_argument, nullptr, 'h'},                  // 帮助信息
       {nullptr, 0, nullptr, 0},  // 终止条目
@@ -124,6 +127,7 @@ bool parseArgs(int argc, char *argv[], ReplayConfig &config) {
         std::string name = cli_options[option_index].name;
         if (name == "demo") config.route = DEMO_ROUTE;          // 使用演示路由
         else if (name == "auto") config.auto_source = true;     // 启用自动数据源
+        else if (name == "video-external") config.external_video = true;  // 启用外部视频
         else config.flags |= flag_map.at(name);                 // 设置对应的标志位
         break;
       }
@@ -170,8 +174,13 @@ int main(int argc, char *argv[]) {
 
   // 创建回放对象，传入所有配置参数
   // 参数：路由名称、允许列表、阻止列表、SubMaster指针、标志位、数据目录、自动数据源
+  uint32_t final_flags = config.flags;
+  if (config.external_video) {
+    final_flags |= REPLAY_FLAG_NO_VIPC;  // 外部视频模式自动禁用内置视频
+  }
+  
   Replay replay(config.route, config.allow, config.block, nullptr,
-                config.flags, config.data_dir, config.auto_source);
+                final_flags, config.data_dir, config.auto_source);
 
   // 如果指定了缓存段数，设置段缓存限制
   if (config.cache_segments > 0) {
