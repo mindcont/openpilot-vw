@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "tools/replay/replay.h"
-#include <ncurses.h>
+#include <ncursesw/ncurses.h>
 
 class ConsoleUI {
 public:

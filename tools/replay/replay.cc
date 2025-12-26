@@ -58,8 +58,8 @@ void Replay::setupSegmentManager(bool has_filters) {
     for (size_t i = 0; i < sockets_.size(); ++i) {
       filters[i] = (i == cereal::Event::Which::INIT_DATA || i == cereal::Event::Which::CAR_PARAMS || sockets_[i]);
     }
-    seg_m    // 设置图形渲染器的过滤器
-    gr_->setFilters(filters);
+    // 设置图形渲染器的过滤器
+    seg_mgr_->setFilters(filters);
   }
 }
 

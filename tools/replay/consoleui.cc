@@ -5,6 +5,10 @@
 #include <string>
 #include <tuple>
 #include <utility>
+#include <locale>
+#include <clocale>
+#include <wchar.h>
+#include <ncursesw/ncurses.h>
 
 #include "common/ratekeeper.h"
 #include "common/util.h"
@@ -14,24 +18,62 @@ namespace {
 
 const int BORDER_SIZE = 3;
 
-const std::initializer_list<std::pair<std::string, std::string>> keyboard_shortcuts[] = {
+// Language support
+enum Language { EN, ZH };
+static Language current_lang = EN;
+
+struct LocalizedText {
+  const char* en;
+  const char* zh;
+};
+
+const char* getText(const LocalizedText& text) {
+  return current_lang == ZH ? text.zh : text.en;
+}
+
+// Localized strings
+const LocalizedText TITLE = {"openpilot replay", "openpilot 回放"};
+const LocalizedText STATUS_PLAYING = {"playing", "播放中"};
+const LocalizedText STATUS_PAUSED = {"paused...", "已暂停..."};
+const LocalizedText ROUTE_TEXT = {"Route:", "路线:"};
+const LocalizedText SEGMENTS_TEXT = {"segments", "段"};
+const LocalizedText CAR_FINGERPRINT = {"Car Fingerprint:", "车辆指纹:"};
+const LocalizedText STATUS_LABEL = {"STATUS:", "状态:"};
+const LocalizedText TIME_LABEL = {"TIME:", "时间:"};
+const LocalizedText STIFFNESS_LABEL = {"STIFFNESS:", "刚度:"};
+const LocalizedText SPEED_LABEL = {"SPEED:", "速度:"};
+const LocalizedText STEER_RATIO_LABEL = {"STEER RATIO:", "转向比:"};
+const LocalizedText ANGLE_OFFSET_LABEL = {"ANGLE OFFSET(AVG|INSTANT):", "角度偏移(平均|瞬时):"};
+const LocalizedText DOWNLOADING = {"Downloading", "下载中"};
+const LocalizedText EXPAND_SCREEN = {"Expand screen vertically to list available commands", "垂直扩展屏幕以显示可用命令"};
+const LocalizedText SEEK_REQUEST = {"Enter seek request:", "输入跳转请求:"};
+const LocalizedText WAITING_INPUT = {"Waiting for input...", "等待输入..."};
+const LocalizedText ENGAGED = {" Engaged ", " 已接管 "};
+const LocalizedText DISENGAGED = {" Disengaged ", " 未接管 "};
+const LocalizedText INFO_LABEL = {" Info ", " 信息 "};
+const LocalizedText WARNING_LABEL = {" Warning ", " 警告 "};
+const LocalizedText CRITICAL_LABEL = {" Critical ", " 严重 "};
+const LocalizedText USER_TAG = {" User Tag ", " 用户标签 "};
+
+const std::initializer_list<std::pair<std::string, LocalizedText>> keyboard_shortcuts[] = {
   {
-    {"s", "+10s"},
-    {"shift+s", "-10s"},
-    {"m", "+60s"},
-    {"shift+m", "-60s"},
-    {"space", "Pause/Resume"},
-    {"e", "Next Engagement"},
-    {"d", "Next Disengagement"},
-    {"t", "Next User Tag"},
-    {"i", "Next Info"},
-    {"w", "Next Warning"},
-    {"c", "Next Critical"},
+    {"s", {"+10s", "+10秒"}},
+    {"shift+s", {"-10s", "-10秒"}},
+    {"m", {"+60s", "+60秒"}},
+    {"shift+m", {"-60s", "-60秒"}},
+    {"space", {"Pause/Resume", "暂停/继续"}},
+    {"e", {"Next Engagement", "下一个接管"}},
+    {"d", {"Next Disengagement", "下一个脱离"}},
+    {"t", {"Next User Tag", "下一个用户标签"}},
+    {"i", {"Next Info", "下一个信息"}},
+    {"w", {"Next Warning", "下一个警告"}},
+    {"c", {"Next Critical", "下一个严重"}},
   },
   {
-    {"enter", "Enter seek request"},
-    {"+/-", "Playback speed"},
-    {"q", "Exit"},
+    {"enter", {"Enter seek request", "输入跳转请求"}},
+    {"+/-", {"Playback speed", "播放速度"}},
+    {"l", {"Toggle Language", "切换语言"}},
+    {"q", {"Exit", "退出"}},
   },
 };
 
@@ -50,7 +92,20 @@ enum Color {
 void add_str(WINDOW *w, const char *str, Color color = Color::Default, bool bold = false) {
   if (color != Color::Default) wattron(w, COLOR_PAIR(color));
   if (bold) wattron(w, A_BOLD);
-  waddstr(w, str);
+  
+  // Convert UTF-8 string to wide characters for proper display
+  size_t len = strlen(str);
+  wchar_t *wstr = new wchar_t[len + 1];
+  size_t wlen = mbstowcs(wstr, str, len);
+  if (wlen != (size_t)-1) {
+    wstr[wlen] = L'\0';
+    waddwstr(w, wstr);
+  } else {
+    // Fallback to regular string if conversion fails
+    waddstr(w, str);
+  }
+  delete[] wstr;
+  
   if (bold) wattroff(w, A_BOLD);
   if (color != Color::Default) wattroff(w, COLOR_PAIR(color));
 }
@@ -60,7 +115,11 @@ ExitHandler do_exit;
 }  // namespace
 
 ConsoleUI::ConsoleUI(Replay *replay) : replay(replay), sm({"carState", "liveParameters"}) {
-  // Initialize curses
+  // Set locale for proper UTF-8 support
+  setlocale(LC_ALL, "");
+  setlocale(LC_CTYPE, "zh_CN.UTF-8");
+  
+  // Initialize curses with wide character support
   initscr();
   clear();
   curs_set(false);
@@ -119,12 +178,12 @@ void ConsoleUI::initWindows() {
     w[Win::Help] = newwin(5, max_width - (2 * BORDER_SIZE), max_height - 6, BORDER_SIZE);
   } else if (max_height >= 17) {
     w[Win::Help] = newwin(1, max_width - (2 * BORDER_SIZE), max_height - 1, BORDER_SIZE);
-    mvwprintw(w[Win::Help], 0, 0, "Expand screen vertically to list available commands");
+    mvwprintw(w[Win::Help], 0, 0, "%s", getText(EXPAND_SCREEN));
   }
 
   // set the title bar
   wbkgd(w[Win::Title], A_REVERSE);
-  mvwprintw(w[Win::Title], 0, 3, "openpilot replay %s", COMMA_VERSION);
+  mvwprintw(w[Win::Title], 0, 3, "%s %s", getText(TITLE), COMMA_VERSION);
 
   // show windows on the real screen
   refresh();
@@ -159,56 +218,61 @@ void ConsoleUI::updateStatus() {
     add_str(win, value.c_str(), color, bold);
     add_str(win, unit.c_str());
   };
-  static const std::pair<const char *, Color> status_text[] = {
-      {"playing", Color::Green},
-      {"paused...", Color::Yellow},
+  static const std::pair<LocalizedText, Color> status_text[] = {
+      {STATUS_PLAYING, Color::Green},
+      {STATUS_PAUSED, Color::Yellow},
   };
 
   sm.update(0);
 
-  auto [status_str, status_color] = status_text[status];
-  write_item(0, 0, "STATUS:    ", status_str, "      ", false, status_color);
+  auto [status_localized, status_color] = status_text[status];
+  write_item(0, 0, getText(STATUS_LABEL), getText(status_localized), "      ", false, status_color);
   auto cur_ts = replay->routeDateTime() + (int)replay->currentSeconds();
   char *time_string = ctime(&cur_ts);
   std::string current_segment = " - " + std::to_string((int)(replay->currentSeconds() / 60));
-  write_item(0, 25, "TIME:  ", time_string, current_segment, true);
+  write_item(0, 25, getText(TIME_LABEL), time_string, current_segment, true);
 
   auto p = sm["liveParameters"].getLiveParameters();
-  write_item(1, 0, "STIFFNESS: ", util::string_format("%.2f %%", p.getStiffnessFactor() * 100), "  ");
-  write_item(1, 25, "SPEED: ", util::string_format("%.2f", sm["carState"].getCarState().getVEgo()), " m/s");
-  write_item(2, 0, "STEER RATIO: ", util::string_format("%.2f", p.getSteerRatio()), "");
+  write_item(1, 0, getText(STIFFNESS_LABEL), util::string_format("%.2f %%", p.getStiffnessFactor() * 100), "  ");
+  write_item(1, 25, getText(SPEED_LABEL), util::string_format("%.2f", sm["carState"].getCarState().getVEgo()), " m/s");
+  write_item(2, 0, getText(STEER_RATIO_LABEL), util::string_format("%.2f", p.getSteerRatio()), "");
   auto angle_offsets = util::string_format("%.2f|%.2f", p.getAngleOffsetAverageDeg(), p.getAngleOffsetDeg());
-  write_item(2, 25, "ANGLE OFFSET(AVG|INSTANT): ", angle_offsets, " deg");
+  write_item(2, 25, getText(ANGLE_OFFSET_LABEL), angle_offsets, " deg");
 
   wrefresh(w[Win::CarState]);
 }
 
 void ConsoleUI::displayHelp() {
+  werase(w[Win::Help]);  // Clear window before redrawing
   for (int i = 0; i < std::size(keyboard_shortcuts); ++i) {
     wmove(w[Win::Help], i * 2, 0);
     for (auto &[key, desc] : keyboard_shortcuts[i]) {
       wattron(w[Win::Help], A_REVERSE);
-      waddstr(w[Win::Help], (' ' + key + ' ').c_str());
+      std::string key_str = " " + key + " ";
+      waddstr(w[Win::Help], key_str.c_str());
       wattroff(w[Win::Help], A_REVERSE);
-      waddstr(w[Win::Help], (' ' + desc + ' ').c_str());
+      std::string desc_str = " " + std::string(getText(desc)) + " ";
+      waddstr(w[Win::Help], desc_str.c_str());
     }
   }
   wrefresh(w[Win::Help]);
 }
 
 void ConsoleUI::displayTimelineDesc() {
-  std::tuple<Color, const char *, bool> indicators[]{
-      {Color::Engaged, " Engaged ", false},
-      {Color::Disengaged, " Disengaged ", false},
-      {Color::Green, " Info ", true},
-      {Color::Yellow, " Warning ", true},
-      {Color::Red, " Critical ", true},
-      {Color::Cyan, " User Tag ", true},
+  werase(w[Win::TimelineDesc]);  // Clear window before redrawing
+  std::tuple<Color, LocalizedText, bool> indicators[]{
+      {Color::Engaged, ENGAGED, false},
+      {Color::Disengaged, DISENGAGED, false},
+      {Color::Green, INFO_LABEL, true},
+      {Color::Yellow, WARNING_LABEL, true},
+      {Color::Red, CRITICAL_LABEL, true},
+      {Color::Cyan, USER_TAG, true},
   };
-  for (auto [color, name, bold] : indicators) {
+  for (auto [color, name_text, bold] : indicators) {
     add_str(w[Win::TimelineDesc], "__", color, bold);
-    add_str(w[Win::TimelineDesc], name);
+    add_str(w[Win::TimelineDesc], getText(name_text));
   }
+  wrefresh(w[Win::TimelineDesc]);
 }
 
 void ConsoleUI::logMessage(ReplyMsgType type, const std::string &msg) {
@@ -232,7 +296,7 @@ void ConsoleUI::updateProgressBar() {
     const int width = 35;
     const float progress = progress_cur / (double)progress_total;
     const int pos = width * progress;
-    wprintw(w[Win::DownloadBar], "Downloading [%s>%s]  %d%% %s", std::string(pos, '=').c_str(),
+    wprintw(w[Win::DownloadBar], "%s [%s>%s]  %d%% %s", getText(DOWNLOADING), std::string(pos, '=').c_str(),
             std::string(width - pos, ' ').c_str(), int(progress * 100.0), formattedDataSize(progress_total).c_str());
   }
   wrefresh(w[Win::DownloadBar]);
@@ -240,8 +304,8 @@ void ConsoleUI::updateProgressBar() {
 
 void ConsoleUI::updateSummary() {
   const auto &route = replay->route();
-  mvwprintw(w[Win::Stats], 0, 0, "Route: %s, %lu segments", route.name().c_str(), route.segments().size());
-  mvwprintw(w[Win::Stats], 1, 0, "Car Fingerprint: %s", replay->carFingerprint().c_str());
+  mvwprintw(w[Win::Stats], 0, 0, "%s %s, %lu %s", getText(ROUTE_TEXT), route.name().c_str(), route.segments().size(), getText(SEGMENTS_TEXT));
+  mvwprintw(w[Win::Stats], 1, 0, "%s %s", getText(CAR_FINGERPRINT), replay->carFingerprint().c_str());
   wrefresh(w[Win::Stats]);
 }
 
@@ -295,10 +359,10 @@ void ConsoleUI::handleKey(char c) {
     nodelay(stdscr, false);
 
     // Wait for user input
-    rWarning("Waiting for input...");
+    rWarning("%s", getText(WAITING_INPUT));
     int y = getmaxy(stdscr) - 9;
     move(y, BORDER_SIZE);
-    add_str(stdscr, "Enter seek request: ", Color::BrightWhite, true);
+    add_str(stdscr, getText(SEEK_REQUEST), Color::BrightWhite, true);
     refresh();
 
     // Seek to choice
@@ -316,6 +380,13 @@ void ConsoleUI::handleKey(char c) {
     curs_set(false);
     refresh();
 
+  } else if (c == 'l' || c == 'L') {
+    current_lang = (current_lang == EN) ? ZH : EN;
+    // Clear and refresh all windows to show new language
+    for (auto win : w) {
+      if (win) werase(win);
+    }
+    initWindows();
   } else if (c == '+' || c == '=') {
     auto it = std::upper_bound(speed_array.begin(), speed_array.end(), replay->getSpeed());
     if (it != speed_array.end()) {

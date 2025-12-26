@@ -1,12 +1,12 @@
 /*
  * openpilot 回放工具主程序
- * 
+ *
  * 功能说明：
  * - 解析命令行参数配置回放选项
  * - 初始化回放系统和控制台UI
  * - 支持多种数据源和播放模式
  * - 提供丰富的过滤和控制选项
- * 
+ *
  * 主要特性：
  * 1. 路由数据回放：支持本地和远程数据源
  * 2. 服务过滤：允许/阻止特定服务的消息
@@ -145,7 +145,7 @@ bool parseArgs(int argc, char *argv[], ReplayConfig &config) {
 
   return true;  // 解析成功
 }
-}
+
 
 // 主函数：程序入口点
 int main(int argc, char *argv[]) {
@@ -170,21 +170,21 @@ int main(int argc, char *argv[]) {
 
   // 创建回放对象，传入所有配置参数
   // 参数：路由名称、允许列表、阻止列表、SubMaster指针、标志位、数据目录、自动数据源
-  Replay replay(config.route, config.allow, config.block, nullptr, 
+  Replay replay(config.route, config.allow, config.block, nullptr,
                 config.flags, config.data_dir, config.auto_source);
-  
+
   // 如果指定了缓存段数，设置段缓存限制
   if (config.cache_segments > 0) {
     replay.setSegmentCacheLimit(config.cache_segments);
   }
-  
+
   // 如果指定了播放速度，设置播放速度（限制在有效范围内）
   if (config.playback_speed > 0) {
-    replay.setSpeed(std::clamp(config.playback_speed, 
+    replay.setSpeed(std::clamp(config.playback_speed,
                               ConsoleUI::speed_array.front(),  // 最小速度
                               ConsoleUI::speed_array.back())); // 最大速度
   }
-  
+
   // 加载路由数据
   if (!replay.load()) {
     return 1;  // 加载失败，退出程序
@@ -192,10 +192,10 @@ int main(int argc, char *argv[]) {
 
   // 创建控制台用户界面
   ConsoleUI console_ui(&replay);
-  
+
   // 开始回放（从指定的秒数开始）
   replay.start(config.start_seconds);
-  
+
   // 运行控制台UI的事件循环，返回退出代码
   return console_ui.exec();
 }
