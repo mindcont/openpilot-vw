@@ -1,4 +1,4 @@
-FROM openpilot-base-arm64:latest
+FROM mindcont/openpilot-base-arm64:latest
 # =========================================================
 # raylib (Desktop / X11) build deps for ARM64
 # =========================================================
@@ -40,8 +40,8 @@ RUN git clone https://github.com/raysan5/raylib.git /tmp/raylib && \
       -DCMAKE_BUILD_TYPE=Release && \
     make -j$(nproc)
 
-
-COPY . ${OPENPILOT_PATH}/
+RUN git clone https://github.com/mindcont/openpilot-vw.git . && \
+    git submodule update --init --recursive
 
 # =========================================================
 # install raylib to openpilot expected path
@@ -56,3 +56,5 @@ ENV UV_BIN="/home/batman/.local/bin/"
 ENV PATH="$UV_BIN:$PATH"
 RUN UV_PROJECT_ENVIRONMENT=$VIRTUAL_ENV uv run scons --cache-readonly -j$(nproc)
 
+RUN cd /home/batman/openpilot && \
+    python3 system/manager/build.py
