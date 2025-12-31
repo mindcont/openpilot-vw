@@ -1,0 +1,58 @@
+FROM openpilot-base-arm64:latest
+# =========================================================
+# raylib (Desktop / X11) build deps for ARM64
+# =========================================================
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    g++ \
+    cmake \
+    git \
+    pkg-config \
+    libx11-dev \
+    libxrandr-dev \
+    libxinerama-dev \
+    libxcursor-dev \
+    libxi-dev \
+    libxext-dev \
+    libxrender-dev \
+    libxfixes-dev \
+    libxkbcommon-dev \
+    libgl1-mesa-dev \
+    libegl1-mesa-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV PYTHONUNBUFFERED=1
+
+ENV OPENPILOT_PATH=/home/batman/openpilot
+
+RUN mkdir -p ${OPENPILOT_PATH}
+WORKDIR ${OPENPILOT_PATH}
+# =========================================================
+# build raylib (ARM64 · Desktop · static)
+# =========================================================
+RUN git clone https://github.com/raysan5/raylib.git /tmp/raylib && \
+    cd /tmp/raylib && \
+    git checkout 4.5.0 && \
+    mkdir build && cd build && \
+    cmake .. \
+      -DBUILD_SHARED_LIBS=OFF \
+      -DPLATFORM=Desktop \
+      -DCMAKE_BUILD_TYPE=Release && \
+    make -j$(nproc)
+
+
+COPY . ${OPENPILOT_PATH}/
+
+# =========================================================
+# install raylib to openpilot expected path
+# =========================================================
+RUN mkdir -p third_party/raylib/aarch64/include && \
+    cp /tmp/raylib/build/raylib/libraylib.a \
+       third_party/raylib/aarch64/ && \
+    cp -r /tmp/raylib/src \
+       third_party/raylib/aarch64/include/raylib
+
+ENV UV_BIN="/home/batman/.local/bin/"
+ENV PATH="$UV_BIN:$PATH"
+RUN UV_PROJECT_ENVIRONMENT=$VIRTUAL_ENV uv run scons --cache-readonly -j$(nproc)
+
