@@ -6,6 +6,20 @@ export NUMEXPR_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
 export VECLIB_MAXIMUM_THREADS=1
 
+export BIG=1
+#export CAMERA=webcam
+#export WEBCAM=1
+#export WEBCAM_DEVICE=/dev/video2
+#export WEBCAM_WIDTH=640
+#export WEBCAM_HEIGHT=480
+#export WEBCAM_FPS=30
+#export WEBCAM_FORMAT=yuyv
+
+# 关键！！！
+export PASSIVE=1
+export PC=1
+export OPENPILOT_DATA=/tmp/data
+
 # models get lower priority than ui
 # - ui is ~5ms
 # - modeld is 20ms

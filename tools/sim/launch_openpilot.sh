@@ -7,6 +7,8 @@ export SIMULATION="1"        # 仿真模式
 export SKIP_FW_QUERY="1"     # 跳过固件查询
 export FINGERPRINT="HONDA_CIVICHONDA_CIVIC"  # 使用基础的Honda Civic指纹
 
+export BIG=1
+
 # 阻止不需要的服务启动
 export BLOCK="${BLOCK},camerad,loggerd,encoderd,micd,logmessaged"
 if [[ "$CI" ]]; then

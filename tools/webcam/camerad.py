@@ -43,7 +43,7 @@ from openpilot.common.realtime import Ratekeeper
 
 # 环境变量配置摄像头设备ID
 # ROAD_CAM: 主摄像头（前视），默认使用设备0
-ROAD_CAM = os.getenv("ROAD_CAM", "0")
+ROAD_CAM = os.getenv("ROAD_CAM", "2")
 # WIDE_CAM: 广角摄像头（可选）
 WIDE_CAM = os.getenv("WIDE_CAM")
 # DRIVER_CAM: 驾驶员监控摄像头（可选）
@@ -67,17 +67,17 @@ if DRIVER_CAM:
 
 class Camerad:
   """摄像头守护进程主类
-  
+
   负责管理多个摄像头，采集图像数据并通过两种方式分发：
   1. VisionIPC: 高效的共享内存方式，用于传输原始图像数据给AI模型
   2. Messaging: 消息系统，用于传输摄像头状态信息给其他进程
   """
-  
+
   def __init__(self):
     # 创建消息发布器，用于发布摄像头状态消息
     # 为每个摄像头创建对应的消息通道
     self.pm = messaging.PubMaster([c.msg_name for c in CAMERAS])
-    
+
     # 创建 VisionIPC 服务器，用于高效传输图像数据
     # "camerad" 是服务名称，其他进程通过此名称连接
     self.vipc_server = VisionIpcServer("camerad")
@@ -88,11 +88,11 @@ class Camerad:
       # 根据操作系统确定摄像头设备路径
       # Linux: /dev/videoX, macOS: 直接使用设备ID
       cam_device = f"/dev/video{c.cam_id}" if platform.system() != "Darwin" else c.cam_id
-      
+
       # 创建摄像头对象
       cam = Camera(c.msg_name, c.stream_type, cam_device)
       self.cameras.append(cam)
-      
+
       # 为每个摄像头流创建共享内存缓冲区
       # 参数：流类型, 缓冲区数量(20), 宽度, 高度
       self.vipc_server.create_buffers(c.stream_type, 20, cam.W, cam.H)
@@ -102,7 +102,7 @@ class Camerad:
 
   def _send_yuv(self, yuv, frame_id, pub_type, yuv_type):
     """发送YUV图像数据和摄像头状态消息
-    
+
     Args:
         yuv: YUV格式的图像数据
         frame_id: 帧ID，用于同步和追踪
@@ -112,14 +112,14 @@ class Camerad:
     # 计算帧结束时间戳（纳秒）
     # 假设20fps，每帧间隔0.05秒
     eof = int(frame_id * 0.05 * 1e9)
-    
+
     # 通过 VisionIPC 发送原始图像数据
     # 参数：流类型, 图像数据, 帧ID, 开始时间戳, 结束时间戳
     self.vipc_server.send(yuv_type, yuv, frame_id, eof, eof)
-    
+
     # 创建摄像头状态消息
     dat = messaging.new_message(pub_type, valid=True)
-    
+
     # 构建消息内容
     msg = {
       "frameId": frame_id,  # 帧ID，用于与图像数据同步
@@ -128,42 +128,42 @@ class Camerad:
                     0.0, 1.0, 0.0,
                     0.0, 0.0, 1.0]
     }
-    
+
     # 设置消息内容并发送
     setattr(dat, pub_type, msg)
     self.pm.send(pub_type, dat)
 
   def camera_runner(self, cam):
     """单个摄像头的运行循环
-    
+
     每个摄像头在独立线程中运行此函数，持续采集和发送图像数据
-    
+
     Args:
         cam: Camera对象，包含摄像头的所有配置和状态
     """
     # 创建频率控制器，维持20fps的稳定帧率
     # 20fps是openpilot摄像头的标准频率
     rk = Ratekeeper(20, None)
-    
+
     # 持续读取摄像头帧数据
     for yuv in cam.read_frames():
       # 发送YUV图像数据和状态消息
       self._send_yuv(yuv, cam.cur_frame_id, cam.cam_type_state, cam.stream_type)
-      
+
       # 递增帧计数器
       cam.cur_frame_id += 1
-      
+
       # 维持稳定的帧率，如果处理太快会等待
       rk.keep_time()
 
   def run(self):
     """启动所有摄像头线程并等待完成
-    
+
     为每个摄像头创建独立的线程，实现并行处理多个摄像头
     这样可以避免一个摄像头的延迟影响其他摄像头的帧率
     """
     threads = []
-    
+
     # 为每个摄像头创建并启动独立线程
     for cam in self.cameras:
       cam_thread = threading.Thread(target=self.camera_runner, args=(cam,))
@@ -177,13 +177,13 @@ class Camerad:
 
 def main():
   """主函数：创建并运行摄像头守护进程
-  
+
   这是webcam版本的camerad，用于在PC上使用USB摄像头
   替代openpilot专用硬件上的摄像头系统
   """
   # 创建摄像头守护进程实例
   camerad = Camerad()
-  
+
   # 开始运行，此函数会阻塞直到程序终止
   camerad.run()
 
