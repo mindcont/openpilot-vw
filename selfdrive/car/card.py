@@ -88,7 +88,7 @@ class Car:
         can = messaging.recv_one_retry(self.can_sock)
         if len(can.can) > 0:
           break
-
+      # 获取车型识别所需参数
       alpha_long_allowed = self.params.get_bool("AlphaLongitudinalEnabled")
       num_pandas = len(messaging.recv_one_retry(self.sm.sock['pandaStates']).pandaStates)
 
@@ -98,6 +98,7 @@ class Car:
         with car.CarParams.from_bytes(cached_params_raw) as _cached_params:
           cached_params = _cached_params
 
+      # 核心：调用 get_car 进行车型识别和加载
       self.CI = get_car(*self.can_callbacks, obd_callback(self.params), alpha_long_allowed, is_release, num_pandas, cached_params)
       self.RI = interfaces[self.CI.CP.carFingerprint].RadarInterface(self.CI.CP)
       self.CP = self.CI.CP
