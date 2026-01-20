@@ -1,0 +1,21 @@
+
+# 在 _get_params 方法中添加以下代码
+if candidate == CAR.VOLKSWAGEN_SAGITAR_MK8:
+    # 仅显示模式配置
+    ret.dashcamOnly = True
+    ret.openpilotLongitudinalControl = False
+    ret.pcmCruise = True
+    ret.radarUnavailable = True
+    
+    # 禁用转向控制
+    ret.steerControlType = structs.CarParams.SteerControlType.none
+    
+    # 网络配置（需要根据实车确定）
+    ret.networkLocation = NetworkLocation.fwdCamera
+    
+    # 传输类型（根据实车配置）
+    ret.transmissionType = TransmissionType.automatic
+    
+    # 安全配置
+    safety_configs = [get_safety_config(structs.CarParams.SafetyModel.volkswagen)]
+    ret.safetyConfigs = safety_configs

@@ -1,0 +1,14 @@
+
+# 在 FW_VERSIONS 字典中添加以下条目
+CAR.VOLKSWAGEN_SAGITAR_MK8: {
+    (Ecu.engine, 0x7e0, None): [
+        b'\xf1\x8704E906024XX\xf1\x89XXXX',
+    ],
+    (Ecu.srs, 0x715, None): [
+        b'\xf1\x875Q0959655XX\xf1\x89XXXX\xf1\x82\xXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
+    ],
+    (Ecu.eps, 0x712, None): [
+        b'\xf1\x875Q0909144XX\xf1\x89XXXX\xf1\x82\xXXXXXXXXXXXX',
+    ],
+    # 注意: 速腾无ACC，通常没有fwdRadar
+},

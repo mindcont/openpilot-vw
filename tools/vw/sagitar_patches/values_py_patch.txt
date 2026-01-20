@@ -1,0 +1,15 @@
+
+# 在 CAR 类中添加以下定义
+VOLKSWAGEN_SAGITAR_MK8 = VolkswagenMQBPlatformConfig(
+    [
+        VWCarDocs("Volkswagen Sagitar 2024", "24款大众速腾（仅显示模式）"),
+    ],
+    VolkswagenCarSpecs(
+        mass=1400,           # 车重(kg) - 需要实测
+        wheelbase=2.69,      # 轴距(m) - 查阅规格书  
+        steerRatio=15.6,     # 转向比 - 需要实测
+        minSteerSpeed=0.4,   # 最小转向速度
+    ),
+    chassis_codes={"FT"},    # 底盘代码 - 从VIN码获取
+    wmis={WMI.SAIC_VOLKSWAGEN},  # 上汽大众
+)
