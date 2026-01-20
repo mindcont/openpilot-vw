@@ -100,9 +100,13 @@ setup_environment() {
     # 基础环境变量
     export USE_WEBCAM=1
     export PC=1
-    export PASSIVE=1
+    export FINGERPRINT="MOCK"  # 使用模拟车型
+    export PASSIVE=0           # 非被动模式
     export OPENPILOT_DATA=/tmp/data
     export LOGPRINT=info
+    export ROAD_CAM =1
+    export WIDE_CAM= 0
+    export LOGPRINT =1
 
     # 强制使用/data目录存储日志
     export LOG_ROOT="$DATA_DIR/media/0/realdata"

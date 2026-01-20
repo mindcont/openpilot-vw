@@ -45,7 +45,7 @@ from openpilot.common.realtime import Ratekeeper
 # ROAD_CAM: 主摄像头（前视），默认使用设备0
 ROAD_CAM = os.getenv("ROAD_CAM", "0")
 # WIDE_CAM: 广角摄像头（可选）
-WIDE_CAM = os.getenv("WIDE_CAM")
+WIDE_CAM = os.getenv("WIDE_CAM", "1")
 # DRIVER_CAM: 驾驶员监控摄像头（可选）
 DRIVER_CAM = os.getenv("DRIVER_CAM")
 
@@ -61,9 +61,11 @@ CAMERAS = [
 # 如果配置了广角摄像头，添加到列表
 if WIDE_CAM:
   CAMERAS.append(CameraType("wideRoadCameraState", VisionStreamType.VISION_STREAM_WIDE_ROAD, WIDE_CAM))
+  print(f"添加广角摄像头: {WIDE_CAM}")
 # 如果配置了驾驶员监控摄像头，添加到列表
 if DRIVER_CAM:
   CAMERAS.append(CameraType("driverCameraState", VisionStreamType.VISION_STREAM_DRIVER, DRIVER_CAM))
+  print(f"添加驾驶员摄像头: {DRIVER_CAM}")
 
 class Camerad:
   """摄像头守护进程主类
