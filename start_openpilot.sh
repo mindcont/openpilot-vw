@@ -130,6 +130,7 @@ show_startup_info() {
     echo "虚拟环境: ${VIRTUAL_ENV:-系统Python}"
     echo "数据目录: $LOG_ROOT"
     echo "swaglog目录: /data/logs"
+    echo "控制台日志: /data/logs/console_YYYYMMDD_HHMMSS.log"
     echo "参数目录: /data/params"
     echo "统计目录: /data/stats"
     echo "日志级别: $LOGPRINT"
@@ -173,9 +174,15 @@ start_openpilot() {
         fi
     fi
     
-    # 启动openpilot
+    # 创建控制台日志文件
+    CONSOLE_LOG="/data/logs/console_$(date +%Y%m%d_%H%M%S).log"
+    mkdir -p "$(dirname "$CONSOLE_LOG")"
+    
     log_success "正在启动openpilot..."
-    exec ./launch_openpilot.sh
+    log_info "控制台日志将保存到: $CONSOLE_LOG"
+    
+    # 启动openpilot并同时输出到控制台和文件
+    exec ./launch_openpilot.sh 2>&1 | tee "$CONSOLE_LOG"
 }
 
 # 主函数
