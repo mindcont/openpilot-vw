@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# openpilot 全局启动脚本
+# 可以从任何目录启动openpilot
+
+# 执行实际的启动脚本
+exec /home/wio/openpilot/start_openpilot.sh "$@"
