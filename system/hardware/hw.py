@@ -16,14 +16,22 @@ class Paths:
     if os.environ.get('LOG_ROOT', False):
       return os.environ['LOG_ROOT']
     elif PC:
-      return str(Path(Paths.comma_home()) / "media" / "0" / "realdata")
+      # PC模式优先使用/data目录，如果不存在则使用用户目录
+      if os.path.exists('/data'):
+        return '/data/media/0/realdata'
+      else:
+        return str(Path(Paths.comma_home()) / "media" / "0" / "realdata")
     else:
       return '/data/media/0/realdata/'
 
   @staticmethod
   def swaglog_root() -> str:
     if PC:
-      return os.path.join(Paths.comma_home(), "log")
+      # PC模式优先使用/data目录，如果不存在则使用用户目录
+      if os.path.exists('/data'):
+        return '/data/logs'
+      else:
+        return os.path.join(Paths.comma_home(), "log")
     else:
       return "/data/log/"
 
@@ -40,14 +48,22 @@ class Paths:
   @staticmethod
   def persist_root() -> str:
     if PC:
-      return os.path.join(Paths.comma_home(), "persist")
+      # PC模式优先使用/data目录，如果不存在则使用用户目录
+      if os.path.exists('/data'):
+        return '/data/params'
+      else:
+        return os.path.join(Paths.comma_home(), "persist")
     else:
       return "/persist/"
 
   @staticmethod
   def stats_root() -> str:
     if PC:
-      return str(Path(Paths.comma_home()) / "stats")
+      # PC模式优先使用/data目录，如果不存在则使用用户目录
+      if os.path.exists('/data'):
+        return '/data/stats'
+      else:
+        return str(Path(Paths.comma_home()) / "stats")
     else:
       return "/data/stats/"
 

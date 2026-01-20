@@ -30,6 +30,7 @@
 | [VIDEO_REPLAY_SOLUTIONS.md](learn-docs/VIDEO_REPLAY_SOLUTIONS.md) | 视频回放方案 | 本地视频流、外部视频注入技术方案 |
 | [ZMQ_MODE_GUIDE.md](learn-docs/ZMQ_MODE_GUIDE.md) | ZMQ 模式详解 | ZeroMQ 网络通信、远程调试、分布式开发 |
 | [openpilot_进程启动指南.md](learn-docs/openpilot_进程启动指南.md) | 进程启动管理 | 启动脚本、进程管理器、环境变量配置 |
+| [openpilot_日志系统详解.md](learn-docs/openpilot_日志系统详解.md) | 日志系统管理 | 日志存储、格式分析、查看工具、故障排除 |
 
 
 
