@@ -132,6 +132,11 @@ def manager_thread() -> None:
   cloudlog.info("manager start")
   cloudlog.info({"environ": os.environ})
 
+  # 显示启动信息
+  print("\033[36m" + "=" * 60 + "\033[0m")
+  print("\033[36m[MANAGER]\033[0m 🚀 openpilot 进程管理器启动")
+  print("\033[36m" + "=" * 60 + "\033[0m")
+
   params = Params()
 
   # 构建需要忽略（不启动）的进程列表
@@ -139,16 +144,35 @@ def manager_thread() -> None:
   # 如果设备未注册，忽略云服务相关进程
   if params.get("DongleId") in (None, UNREGISTERED_DONGLE_ID):
     ignore += ["manage_athenad", "uploader"]
+    print("\033[33m[MANAGER]\033[0m ⚠️  设备未注册，忽略云服务: manage_athenad, uploader")
   # 如果设置了NOBOARD环境变量（无硬件模式），忽略pandad
   if os.getenv("NOBOARD") is not None:
     ignore.append("pandad")
+    print("\033[33m[MANAGER]\033[0m 💻 PC模式，忽略硬件进程: pandad")
   # 添加BLOCK环境变量指定的进程到忽略列表
-  ignore += [x for x in os.getenv("BLOCK", "").split(",") if len(x) > 0]
+  blocked_procs = [x for x in os.getenv("BLOCK", "").split(",") if len(x) > 0]
+  ignore += blocked_procs
+  if blocked_procs:
+    print(f"\033[33m[MANAGER]\033[0m 🚫 手动阻止进程: {', '.join(blocked_procs)}")
 
   # 设置消息订阅和发布
   sm = messaging.SubMaster(['deviceState', 'carParams', 'pandaStates'], poll='deviceState')
   pm = messaging.PubMaster(['managerState'])
 
+  print("\033[34m[MANAGER]\033[0m 📋 初始化阶段 - 启动基础进程")
+  
+  # 检查摄像头配置
+  webcam_enabled = os.getenv("USE_WEBCAM") is not None
+  driver_view_enabled = params.get_bool("IsDriverViewEnabled")
+  if webcam_enabled:
+    if driver_view_enabled:
+      print("\033[32m[MANAGER]\033[0m 📹 摄像头已启用: webcamerad 将启动 (USE_WEBCAM=1, IsDriverViewEnabled=True)")
+    else:
+      print("\033[33m[MANAGER]\033[0m ⚠️  摄像头配置: webcamerad 需要驾驶员视图模式或上路状态")
+      print("\033[33m[MANAGER]\033[0m 💡 提示: 运行 'python3 enable_camera.py' 启用摄像头")
+  else:
+    print("\033[33m[MANAGER]\033[0m 📹 摄像头未启用: 设置 USE_WEBCAM=1 启用 webcamerad")
+  
   # 初始化：设置离线参数，启动所有符合条件的进程
   write_onroad_params(False, params)  # 设置为离线状态
   ensure_running(managed_processes.values(), False, params=params, CP=sm['carParams'], not_run=ignore)
@@ -156,6 +180,9 @@ def manager_thread() -> None:
   # 状态跟踪变量
   started_prev = False    # 上一次的启动状态
   ignition_prev = False   # 上一次的点火状态
+  
+  print("\033[32m[MANAGER]\033[0m ✅ 初始化完成，进入主监控循环")
+  print("\033[36m" + "=" * 60 + "\033[0m")
 
   # 主监控循环
   while True:
@@ -168,15 +195,18 @@ def manager_thread() -> None:
     # 检测状态变化并清理相应参数
     if started and not started_prev:
       # 从离线转为在线：清理上路转换参数
+      print("\033[32m[MANAGER]\033[0m 🚗 车辆上路 - 启动驾驶相关进程")
       params.clear_all(ParamKeyFlag.CLEAR_ON_ONROAD_TRANSITION)
     elif not started and started_prev:
       # 从在线转为离线：清理下路转换参数
+      print("\033[33m[MANAGER]\033[0m 🏠 车辆停车 - 停止驾驶相关进程")
       params.clear_all(ParamKeyFlag.CLEAR_ON_OFFROAD_TRANSITION)
 
     # 检测点火状态（通过CAN或硬件线路）
     ignition = any(ps.ignitionLine or ps.ignitionCan for ps in sm['pandaStates'] if ps.pandaType != log.PandaState.PandaType.unknown)
     if ignition and not ignition_prev:
       # 点火时清理相关参数
+      print("\033[32m[MANAGER]\033[0m 🔥 车辆点火 - 清理点火参数")
       params.clear_all(ParamKeyFlag.CLEAR_ON_IGNITION_ON)
 
     # 更新在路参数，这会驱动pandad的安全设置线程
@@ -215,6 +245,7 @@ def manager_thread() -> None:
       if params.get_bool(param):
         shutdown = True
         params.put("LastManagerExitReason", f"{param} {datetime.datetime.now()}")
+        print(f"\033[31m[MANAGER]\033[0m 🛑 系统关闭: {param}")
         cloudlog.warning(f"Shutting down manager - {param} set")
 
     if shutdown:

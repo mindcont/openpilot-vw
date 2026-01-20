@@ -87,6 +87,7 @@ class ManagerProcess(ABC):
 
     if self.proc.exitcode is None:
       if not self.shutting_down:
+        print(f"\033[31m[MANAGER]\033[0m 🛑 停止进程: {self.name}")
         cloudlog.info(f"killing {self.name}")
         if sig is None:
           sig = signal.SIGKILL if self.sigkill else signal.SIGINT
@@ -105,6 +106,7 @@ class ManagerProcess(ABC):
         self.proc.join()
 
     ret = self.proc.exitcode
+    print(f"\033[90m[MANAGER]\033[0m ☠️  进程已退出: {self.name} (exitcode: {ret})")
     cloudlog.info(f"{self.name} is dead with {ret}")
 
     if self.proc.exitcode is not None:
@@ -161,6 +163,7 @@ class NativeProcess(ManagerProcess):
       return
 
     cwd = os.path.join(BASEDIR, self.cwd)
+    print(f"\033[32m[MANAGER]\033[0m 🚀 启动进程: {self.name} (Native)")
     cloudlog.info(f"starting process {self.name}")
     self.proc = Process(name=self.name, target=self.launcher, args=(self.cmdline, cwd, self.name))
     self.proc.start()
@@ -194,6 +197,7 @@ class PythonProcess(ManagerProcess):
     # https://github.com/tinygrad/tinygrad/blob/ac9c96dae1656dc220ee4acc39cef4dd449aa850/tinygrad/device.py#L26
     name = self.name if "modeld" not in self.name else "MainProcess"
 
+    print(f"\033[32m[MANAGER]\033[0m 🐍 启动进程: {self.name} (Python: {self.module})")
     cloudlog.info(f"starting python {self.module}")
     self.proc = Process(name=name, target=self.launcher, args=(self.module, self.name))
     self.proc.start()
@@ -228,11 +232,13 @@ class DaemonProcess(ManagerProcess):
         with open(f'/proc/{pid}/cmdline') as f:
           if self.module in f.read():
             # daemon is running
+            print(f"\033[32m[MANAGER]\033[0m 🔄 守护进程已运行: {self.name} (PID: {pid})")
             return
       except (OSError, FileNotFoundError):
         # process is dead
         pass
 
+    print(f"\033[32m[MANAGER]\033[0m 🔥 启动守护进程: {self.name} (Daemon: {self.module})")
     cloudlog.info(f"starting daemon {self.name}")
     proc = subprocess.Popen(['python', '-m', self.module],
                                stdin=open('/dev/null'),

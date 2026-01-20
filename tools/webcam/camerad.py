@@ -43,7 +43,7 @@ from openpilot.common.realtime import Ratekeeper
 
 # 环境变量配置摄像头设备ID
 # ROAD_CAM: 主摄像头（前视），默认使用设备0
-ROAD_CAM = os.getenv("ROAD_CAM", "2")
+ROAD_CAM = os.getenv("ROAD_CAM", "0")
 # WIDE_CAM: 广角摄像头（可选）
 WIDE_CAM = os.getenv("WIDE_CAM")
 # DRIVER_CAM: 驾驶员监控摄像头（可选）

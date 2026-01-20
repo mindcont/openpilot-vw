@@ -34,7 +34,7 @@ log_error() {
 # 检查并创建目录
 setup_directories() {
     log_info "设置数据目录..."
-    
+
     # 检查/data目录权限
     if [ -d "$DATA_DIR" ]; then
         if [ ! -w "$DATA_DIR" ]; then
@@ -54,15 +54,15 @@ setup_directories() {
         }
         sudo chown -R $USER:$USER $DATA_DIR 2>/dev/null
     fi
-    
+
     # 确保必要目录存在且有正确权限
     mkdir -p $DATA_DIR/{logs,media/0/realdata,params,stats} 2>/dev/null
     chmod 755 $DATA_DIR/{logs,media/0/realdata,params,stats} 2>/dev/null
-    
+
     # 备用目录（以防万一）
     mkdir -p ~/.comma/{log,media/0/realdata,params,stats} 2>/dev/null
     mkdir -p /tmp/data/logs 2>/dev/null
-    
+
     return 0
 }
 
@@ -72,12 +72,12 @@ check_openpilot_dir() {
         log_error "openpilot目录不存在: $OPENPILOT_DIR"
         exit 1
     fi
-    
+
     if [ ! -f "$OPENPILOT_DIR/launch_openpilot.sh" ]; then
         log_error "launch_openpilot.sh不存在"
         exit 1
     fi
-    
+
     log_success "openpilot目录检查通过"
 }
 
@@ -96,30 +96,32 @@ setup_venv() {
 # 设置环境变量
 setup_environment() {
     log_info "设置环境变量..."
-    
+
     # 基础环境变量
+    export USE_WEBCAM=1
     export PC=1
     export PASSIVE=1
     export OPENPILOT_DATA=/tmp/data
     export LOGPRINT=info
-    
+
     # 强制使用/data目录存储日志
     export LOG_ROOT="$DATA_DIR/media/0/realdata"
     log_success "强制使用/data目录存储日志: $LOG_ROOT"
-    
+
     # 其他配置
     export SKIP_FW_QUERY=1
     export NOBOARD=1
     export BIG=1
-    
+
     # 线程数限制
     export OMP_NUM_THREADS=1
     export MKL_NUM_THREADS=1
     export NUMEXPR_NUM_THREADS=1
     export OPENBLAS_NUM_THREADS=1
     export VECLIB_MAXIMUM_THREADS=1
-    
+
     log_success "环境变量设置完成"
+    log_info "摄像头配置: USE_WEBCAM=1 (将启动webcamerad进程)"
 }
 
 # 显示启动信息
@@ -136,7 +138,7 @@ show_startup_info() {
     echo "日志级别: $LOGPRINT"
     echo "PC模式: $PC"
     echo "被动模式: $PASSIVE"
-    
+
     # 检查目录权限
     echo
     log_info "=== 目录权限检查 ==="
@@ -153,12 +155,12 @@ show_startup_info() {
 # 启动openpilot
 start_openpilot() {
     log_info "启动openpilot..."
-    
+
     cd "$OPENPILOT_DIR" || {
         log_error "无法切换到openpilot目录"
         exit 1
     }
-    
+
     # 检查是否有其他实例在运行
     if pgrep -f "manager.py" > /dev/null; then
         log_warning "检测到openpilot已在运行"
@@ -173,14 +175,14 @@ start_openpilot() {
             exit 0
         fi
     fi
-    
+
     # 创建控制台日志文件
     CONSOLE_LOG="/data/logs/console_$(date +%Y%m%d_%H%M%S).log"
     mkdir -p "$(dirname "$CONSOLE_LOG")"
-    
+
     log_success "正在启动openpilot..."
     log_info "控制台日志将保存到: $CONSOLE_LOG"
-    
+
     # 启动openpilot并同时输出到控制台和文件
     exec ./launch_openpilot.sh 2>&1 | tee "$CONSOLE_LOG"
 }
@@ -192,17 +194,17 @@ main() {
     echo "    openpilot 一键启动脚本"
     echo "=================================="
     echo -e "${NC}"
-    
+
     # 执行启动步骤
     check_openpilot_dir
     setup_directories
     setup_venv
     setup_environment
     show_startup_info
-    
+
     # 询问是否继续
     read -p "按Enter键继续启动，或Ctrl+C取消..." -r
-    
+
     start_openpilot
 }
 

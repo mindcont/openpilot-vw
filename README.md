@@ -31,6 +31,8 @@
 | [ZMQ_MODE_GUIDE.md](learn-docs/ZMQ_MODE_GUIDE.md) | ZMQ 模式详解 | ZeroMQ 网络通信、远程调试、分布式开发 |
 | [openpilot_进程启动指南.md](learn-docs/openpilot_进程启动指南.md) | 进程启动管理 | 启动脚本、进程管理器、环境变量配置 |
 | [openpilot_日志系统详解.md](learn-docs/openpilot_日志系统详解.md) | 日志系统管理 | 日志存储、格式分析、查看工具、故障排除 |
+| [视频流加载机制分析.md](learn-docs/视频流加载机制分析.md) | 视频流处理机制 | 摄像头设备映射、VisionIPC通信、图像格式转换 |
+| [openpilot_摄像头启动配置指南.md](learn-docs/openpilot_摄像头启动配置指南.md) | 摄像头启动配置 | PC模式摄像头启动条件、设备配置、故障排除 |
 
 
 
