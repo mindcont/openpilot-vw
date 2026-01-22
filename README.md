@@ -33,6 +33,9 @@
 | [openpilot_日志系统详解.md](learn-docs/openpilot_日志系统详解.md) | 日志系统管理 | 日志存储、格式分析、查看工具、故障排除 |
 | [视频流加载机制分析.md](learn-docs/视频流加载机制分析.md) | 视频流处理机制 | 摄像头设备映射、VisionIPC通信、图像格式转换 |
 | [openpilot_摄像头启动配置指南.md](learn-docs/openpilot_摄像头启动配置指南.md) | 摄像头启动配置 | PC模式摄像头启动条件、设备配置、故障排除 |
+| [openpilot_车型指纹配置指南.md](learn-docs/openpilot_车型指纹配置指南.md) | 车型指纹配置 | FINGERPRINT环境变量、大众车型支持、配置方法 |
+| [大众车型DBC文件映射分析.md](learn-docs/大众车型DBC文件映射分析.md) | DBC文件映射 | MQB/PQ/MLB平台、vw_mqb.dbc使用、技术差异 |
+| [VOLKSWAGEN_GOLF_MK7_CAN解析服务加载流程.md](learn-docs/VOLKSWAGEN_GOLF_MK7_CAN解析服务加载流程.md) | CAN解析流程 | 车型识别、DBC加载、函数调用链、服务启动 |
 
 
 

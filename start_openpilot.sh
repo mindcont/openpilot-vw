@@ -141,7 +141,7 @@ setup_environment() {
     #export USE_WEBCAM=1
     #export PC=0
     export FINGERPRINT="VOLKSWAGEN_GOLF_MK7"  # 使用模拟车型
-    export PASSIVE=0           # 非被动模式
+    export PASSIVE=1           # 被动模式
     export OPENPILOT_DATA=/tmp/data
     export LOGPRINT=info
     #export ROAD_CAM =1
@@ -153,8 +153,8 @@ setup_environment() {
     log_success "swaglog目录: $SWAGLOG_DIR"
 
     # 其他配置
-    export SKIP_FW_QUERY=1
-    export NOBOARD=1
+    export SKIP_FW_QUERY=0
+    export NOBOARD=0
     export BIG=1
 
     # 线程数限制
