@@ -31,6 +31,40 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# 按日期管理日志目录
+setup_daily_log_structure() {
+    local today=$(date +%Y-%m-%d)
+    local log_date_dir="$DATA_DIR/logs/$today"
+    local realdata_date_dir="$DATA_DIR/media/0/realdata/$today"
+
+    # 创建今日日志目录
+    mkdir -p "$log_date_dir" "$realdata_date_dir" 2>/dev/null
+
+    # 创建软链接指向今日目录（保持兼容性）
+    ln -sfn "$today" "$DATA_DIR/logs/current" 2>/dev/null
+    ln -sfn "$today" "$DATA_DIR/media/0/realdata/current" 2>/dev/null
+
+    # 设置环境变量使用今日目录
+    export LOG_ROOT="$realdata_date_dir"
+    export SWAGLOG_DIR="$log_date_dir"
+
+    log_success "今日日志目录: $log_date_dir"
+    log_success "今日数据目录: $realdata_date_dir"
+}
+
+# 清理旧日志（保留最近7天）
+cleanup_old_logs() {
+    log_info "清理30天前的旧日志..."
+
+    # 清理logs目录
+    find "$DATA_DIR/logs" -maxdepth 1 -type d -name "20??-??-??" -mtime +30 -exec rm -rf {} \; 2>/dev/null
+
+    # 清理realdata目录
+    find "$DATA_DIR/media/0/realdata" -maxdepth 1 -type d -name "20??-??-??" -mtime +30 -exec rm -rf {} \; 2>/dev/null
+
+    log_info "旧日志清理完成"
+}
+
 # 检查并创建目录
 setup_directories() {
     log_info "设置数据目录..."
@@ -55,9 +89,15 @@ setup_directories() {
         sudo chown -R $USER:$USER $DATA_DIR 2>/dev/null
     fi
 
-    # 确保必要目录存在且有正确权限
+    # 确保基础目录存在
     mkdir -p $DATA_DIR/{logs,media/0/realdata,params,stats} 2>/dev/null
     chmod 755 $DATA_DIR/{logs,media/0/realdata,params,stats} 2>/dev/null
+
+    # 设置按日期管理的日志结构
+    setup_daily_log_structure
+
+    # 清理旧日志
+    cleanup_old_logs
 
     # 备用目录（以防万一）
     mkdir -p ~/.comma/{log,media/0/realdata,params,stats} 2>/dev/null
@@ -98,19 +138,19 @@ setup_environment() {
     log_info "设置环境变量..."
 
     # 基础环境变量
-    export USE_WEBCAM=1
-    export PC=1
-    export FINGERPRINT="MOCK"  # 使用模拟车型
+    #export USE_WEBCAM=1
+    #export PC=0
+    export FINGERPRINT="VOLKSWAGEN_GOLF_MK7"  # 使用模拟车型
     export PASSIVE=0           # 非被动模式
     export OPENPILOT_DATA=/tmp/data
     export LOGPRINT=info
-    export ROAD_CAM =1
-    export WIDE_CAM= 0
+    #export ROAD_CAM =1
+    #export WIDE_CAM= 0
     export LOGPRINT =1
 
-    # 强制使用/data目录存储日志
-    export LOG_ROOT="$DATA_DIR/media/0/realdata"
-    log_success "强制使用/data目录存储日志: $LOG_ROOT"
+    # 日志目录已在setup_directories中设置
+    log_success "使用按日期管理的日志目录: $LOG_ROOT"
+    log_success "swaglog目录: $SWAGLOG_DIR"
 
     # 其他配置
     export SKIP_FW_QUERY=1
@@ -135,8 +175,8 @@ show_startup_info() {
     echo "工作目录: $OPENPILOT_DIR"
     echo "虚拟环境: ${VIRTUAL_ENV:-系统Python}"
     echo "数据目录: $LOG_ROOT"
-    echo "swaglog目录: /data/logs"
-    echo "控制台日志: /data/logs/console_YYYYMMDD_HHMMSS.log"
+    echo "swaglog目录: $SWAGLOG_DIR"
+    echo "控制台日志: $SWAGLOG_DIR/console_YYYYMMDD_HHMMSS.log"
     echo "参数目录: /data/params"
     echo "统计目录: /data/stats"
     echo "日志级别: $LOGPRINT"
@@ -146,13 +186,19 @@ show_startup_info() {
     # 检查目录权限
     echo
     log_info "=== 目录权限检查 ==="
-    for dir in "/data/logs" "/data/media/0/realdata" "/data/params" "/data/stats"; do
+    for dir in "$SWAGLOG_DIR" "$LOG_ROOT" "/data/params" "/data/stats"; do
         if [ -w "$dir" ]; then
             echo "✓ $dir (可写)"
         else
             echo "✗ $dir (不可写)"
         fi
     done
+
+    # 显示日志目录结构
+    echo
+    log_info "=== 日志目录结构 ==="
+    echo "今日日志: $(date +%Y-%m-%d)"
+    echo "历史日志: $(ls -1 $DATA_DIR/logs/ 2>/dev/null | grep -E '^20[0-9]{2}-[0-9]{2}-[0-9]{2}$' | tail -3 | tr '\n' ' ')"
     echo
 }
 
@@ -180,8 +226,8 @@ start_openpilot() {
         fi
     fi
 
-    # 创建控制台日志文件
-    CONSOLE_LOG="/data/logs/console_$(date +%Y%m%d_%H%M%S).log"
+    # 创建控制台日志文件（使用今日目录）
+    CONSOLE_LOG="$SWAGLOG_DIR/console_$(date +%Y%m%d_%H%M%S).log"
     mkdir -p "$(dirname "$CONSOLE_LOG")"
 
     log_success "正在启动openpilot..."
