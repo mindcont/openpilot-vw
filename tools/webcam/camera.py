@@ -20,9 +20,10 @@ class Camera:
     self.camera_id = camera_id
     self.cap = cv.VideoCapture(camera_id)
 
-    # 目标分辨率（modeld 期望的输入尺寸）
-    self.target_W = 1280
-    self.target_H = 720
+    # 目标分辨率 — 必须与 DEVICE_CAMERAS 中的 intrinsics 对应
+    # PC 模式下 fcam 的原始分辨率是 1928x1208
+    self.target_W = 1928
+    self.target_H = 1208
 
     if not self.is_video_file:
       self.cap.set(cv.CAP_PROP_FRAME_WIDTH, float(self.target_W))

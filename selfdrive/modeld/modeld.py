@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import os
-from openpilot.system.hardware import TICI
+from openpilot.system.hardware import TICI, PC
 os.environ['DEV'] = 'QCOM' if TICI else 'CPU'
 USBGPU = "USBGPU" in os.environ
 if USBGPU:
@@ -276,6 +276,16 @@ def main(demo=False):
   model_transform_main = np.zeros((3, 3), dtype=np.float32)
   model_transform_extra = np.zeros((3, 3), dtype=np.float32)
   live_calib_seen = False
+
+  # PC调试模式：直接设置默认标定矩阵（无需等待 liveCalibration 消息）
+  if PC:
+    from openpilot.common.transformations.model import get_warp_matrix
+    dc = DEVICE_CAMERAS[('pc', 'unknown')]
+    default_euler = np.array([0.0, 0.0, 0.0], dtype=np.float32)
+    model_transform_main = get_warp_matrix(default_euler, dc.fcam.intrinsics, False).astype(np.float32)
+    model_transform_extra = get_warp_matrix(default_euler, dc.ecam.intrinsics, True).astype(np.float32)
+    live_calib_seen = True
+    cloudlog.warning("PC mode: using default calibration transform")
   buf_main, buf_extra = None, None
   meta_main = FrameMeta()
   meta_extra = FrameMeta()

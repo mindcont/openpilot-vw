@@ -147,9 +147,10 @@ class Camerad:
     Args:
         cam: Camera对象，包含摄像头的所有配置和状态
     """
-    # 创建频率控制器，维持20fps的稳定帧率
-    # 20fps是openpilot摄像头的标准频率
-    rk = Ratekeeper(20, None)
+    # 创建频率控制器
+    # 视频文件模式使用较低帧率（CPU推理较慢），摄像头模式用20fps
+    fps = int(os.getenv("WEBCAM_FPS", "20")) if cam.is_video_file else 20
+    rk = Ratekeeper(fps, None)
 
     # 持续读取摄像头帧数据
     for yuv in cam.read_frames():
