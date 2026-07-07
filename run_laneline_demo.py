@@ -76,15 +76,6 @@ def simulate_onroad(procs):
     """模拟车辆上路状态，持续发送消息"""
     pm = messaging.PubMaster(['controlsState', 'deviceState', 'pandaStates', 'carParams'])
 
-    msgs = {s: messaging.new_message(s) for s in ['controlsState', 'deviceState', 'carParams']}
-    msgs['deviceState'].deviceState.started = True
-    msgs['deviceState'].deviceState.deviceType = HARDWARE.get_device_type()
-    msgs['carParams'].carParams.openpilotLongitudinalControl = True
-
-    msgs['pandaStates'] = messaging.new_message('pandaStates', 1)
-    msgs['pandaStates'].pandaStates[0].ignitionLine = True
-    msgs['pandaStates'].pandaStates[0].pandaType = log.PandaState.PandaType.uno
-
     # 同时监听 modelV2 输出
     sm = messaging.SubMaster(['modelV2'])
     model_received = False
@@ -96,9 +87,20 @@ def simulate_onroad(procs):
 
     try:
         while True:
-            # 发送模拟消息
-            for s in msgs:
-                pm.send(s, msgs[s])
+            # 每次发送新的消息对象，避免重复写入警告
+            for s in ['controlsState', 'deviceState', 'carParams']:
+                msg = messaging.new_message(s)
+                if s == 'deviceState':
+                    msg.deviceState.started = True
+                    msg.deviceState.deviceType = HARDWARE.get_device_type()
+                elif s == 'carParams':
+                    msg.carParams.openpilotLongitudinalControl = True
+                pm.send(s, msg)
+
+            panda_msg = messaging.new_message('pandaStates', 1)
+            panda_msg.pandaStates[0].ignitionLine = True
+            panda_msg.pandaStates[0].pandaType = log.PandaState.PandaType.uno
+            pm.send('pandaStates', panda_msg)
 
             # 检查 modelV2 输出
             sm.update(0)
@@ -112,8 +114,9 @@ def simulate_onroad(procs):
                     model = sm['modelV2']
                     lane_count = len(model.laneLines)
                     edge_count = len(model.roadEdges)
-                    lane_probs = [f"{l.prob:.2f}" for l in model.laneLines] if lane_count > 0 else []
-                    print(f"[MODEL] frame={frame_count} | laneLines={lane_count} probs=[{', '.join(lane_probs)}] | roadEdges={edge_count}")
+                    lane_probs = [f"{p:.2f}" for p in model.laneLineProbs] if len(model.laneLineProbs) > 0 else []
+                    edge_stds = [f"{s:.2f}" for s in model.roadEdgeStds] if len(model.roadEdgeStds) > 0 else []
+                    print(f"[MODEL] frame={frame_count} | laneLines={lane_count} probs=[{', '.join(lane_probs)}] | roadEdges={edge_count} stds=[{', '.join(edge_stds)}]")
 
             time.sleep(1 / 100)
 

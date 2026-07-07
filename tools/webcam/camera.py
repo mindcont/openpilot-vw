@@ -20,13 +20,17 @@ class Camera:
     self.camera_id = camera_id
     self.cap = cv.VideoCapture(camera_id)
 
+    # 目标分辨率（modeld 期望的输入尺寸）
+    self.target_W = 1280
+    self.target_H = 720
+
     if not self.is_video_file:
-      self.cap.set(cv.CAP_PROP_FRAME_WIDTH, 1280.0)
-      self.cap.set(cv.CAP_PROP_FRAME_HEIGHT, 720.0)
+      self.cap.set(cv.CAP_PROP_FRAME_WIDTH, float(self.target_W))
+      self.cap.set(cv.CAP_PROP_FRAME_HEIGHT, float(self.target_H))
       self.cap.set(cv.CAP_PROP_FPS, 25.0)
 
-    self.W = self.cap.get(cv.CAP_PROP_FRAME_WIDTH)
-    self.H = self.cap.get(cv.CAP_PROP_FRAME_HEIGHT)
+    self.W = self.target_W if self.is_video_file else self.cap.get(cv.CAP_PROP_FRAME_WIDTH)
+    self.H = self.target_H if self.is_video_file else self.cap.get(cv.CAP_PROP_FRAME_HEIGHT)
 
   @classmethod
   def bgr2nv12(self, bgr):
@@ -45,9 +49,13 @@ class Camera:
             break
         else:
           break
-      # Rotate the frame 180 degrees (flip both axes)
-      # 视频文件不需要翻转
-      if not self.is_video_file:
+      # 视频文件缩放到目标分辨率
+      if self.is_video_file:
+        h, w = frame.shape[:2]
+        if w != self.target_W or h != self.target_H:
+          frame = cv.resize(frame, (self.target_W, self.target_H))
+      else:
+        # 摄像头模式翻转 180 度
         frame = cv.flip(frame, -1)
       yuv = Camera.bgr2nv12(frame)
       yield yuv.data.tobytes()
