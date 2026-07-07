@@ -138,7 +138,7 @@ setup_environment() {
     log_info "设置环境变量..."
 
     # 基础环境变量
-    #export USE_WEBCAM=1
+    export USE_WEBCAM=1
     #export PC=0
     export FINGERPRINT="VOLKSWAGEN_GOLF_MK7"  # 使用模拟车型
     export PASSIVE=1           # 被动模式

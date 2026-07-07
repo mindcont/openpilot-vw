@@ -85,7 +85,7 @@ def manager_init() -> None:
     dongle_id = reg_res
   else:
     raise Exception(f"Registration failed for device {serial}")
-  
+
   # 设置环境变量供日志系统使用
   os.environ['DONGLE_ID'] = dongle_id  # 设备ID
   os.environ['GIT_ORIGIN'] = build_metadata.openpilot.git_normalized_origin # Git源
@@ -147,7 +147,7 @@ def manager_thread() -> None:
     print("\033[33m[MANAGER]\033[0m ⚠️  设备未注册，忽略云服务: manage_athenad, uploader")
   # 如果设置了NOBOARD环境变量（无硬件模式），忽略pandad
   if os.getenv("NOBOARD") is not None:
-    ignore.append("pandad")
+    #ignore.append("pandad")
     print("\033[33m[MANAGER]\033[0m 💻 PC模式，忽略硬件进程: pandad")
   # 添加BLOCK环境变量指定的进程到忽略列表
   blocked_procs = [x for x in os.getenv("BLOCK", "").split(",") if len(x) > 0]
@@ -160,7 +160,7 @@ def manager_thread() -> None:
   pm = messaging.PubMaster(['managerState'])
 
   print("\033[34m[MANAGER]\033[0m 📋 初始化阶段 - 启动基础进程")
-  
+
   # 检查摄像头配置
   webcam_enabled = os.getenv("USE_WEBCAM") is not None
   driver_view_enabled = params.get_bool("IsDriverViewEnabled")
@@ -172,7 +172,7 @@ def manager_thread() -> None:
       print("\033[33m[MANAGER]\033[0m 💡 提示: 运行 'python3 enable_camera.py' 启用摄像头")
   else:
     print("\033[33m[MANAGER]\033[0m 📹 摄像头未启用: 设置 USE_WEBCAM=1 启用 webcamerad")
-  
+
   # 初始化：设置离线参数，启动所有符合条件的进程
   write_onroad_params(False, params)  # 设置为离线状态
   ensure_running(managed_processes.values(), False, params=params, CP=sm['carParams'], not_run=ignore)
@@ -180,7 +180,7 @@ def manager_thread() -> None:
   # 状态跟踪变量
   started_prev = False    # 上一次的启动状态
   ignition_prev = False   # 上一次的点火状态
-  
+
   print("\033[32m[MANAGER]\033[0m ✅ 初始化完成，进入主监控循环")
   print("\033[36m" + "=" * 60 + "\033[0m")
 
@@ -256,7 +256,7 @@ def main() -> None:
   """主函数 - 管理器的入口点"""
   # 执行初始化
   manager_init()
-  
+
   # 如果设置了PREPAREONLY环境变量，只做初始化不运行主循环
   if os.getenv("PREPAREONLY") is not None:
     return
