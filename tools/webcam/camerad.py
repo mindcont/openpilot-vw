@@ -87,9 +87,13 @@ class Camerad:
     # 初始化摄像头列表
     self.cameras = []
     for c in CAMERAS:
-      # 根据操作系统确定摄像头设备路径
-      # Linux: /dev/videoX, macOS: 直接使用设备ID
-      cam_device = f"/dev/video{c.cam_id}" if platform.system() != "Darwin" else c.cam_id
+      # 判断 cam_id 是否为视频文件路径
+      if os.path.isfile(c.cam_id):
+        cam_device = c.cam_id
+      elif platform.system() != "Darwin":
+        cam_device = f"/dev/video{c.cam_id}"
+      else:
+        cam_device = c.cam_id
 
       # 创建摄像头对象
       cam = Camera(c.msg_name, c.stream_type, cam_device)
