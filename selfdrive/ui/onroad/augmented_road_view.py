@@ -4,6 +4,7 @@ import pyray as rl
 from cereal import log, messaging
 from msgq.visionipc import VisionStreamType
 from openpilot.selfdrive.ui import UI_BORDER_SIZE
+from openpilot.system.hardware import PC
 from openpilot.selfdrive.ui.ui_state import ui_state, UIStatus
 from openpilot.selfdrive.ui.onroad.alert_renderer import AlertRenderer
 from openpilot.selfdrive.ui.onroad.driver_state import DriverStateRenderer
@@ -143,10 +144,15 @@ class AugmentedRoadView(CameraView):
 
     # Check if live calibration data is available and valid
     if not (sm.updated["liveCalibration"] and sm.valid['liveCalibration']):
+      # PC模式下即使 valid 为 False 也尝试使用默认标定
+      if PC and not hasattr(self, '_pc_calib_initialized'):
+        self._pc_calib_initialized = True
+        self.view_from_calib = view_frame_from_device_frame.copy()
+        self.view_from_wide_calib = view_frame_from_device_frame.copy()
       return
 
     calib = sm['liveCalibration']
-    if len(calib.rpyCalib) != 3 or calib.calStatus != CALIBRATED:
+    if len(calib.rpyCalib) != 3 or (calib.calStatus != CALIBRATED and not PC):
       return
 
     # Update view_from_calib matrix

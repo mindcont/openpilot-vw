@@ -66,10 +66,12 @@ def start_processes():
     # 先创建 PubMaster 并发送初始消息（确保 modeld 启动时已有 publisher 在线）
     global _pm
     _pm = messaging.PubMaster(['controlsState', 'deviceState', 'pandaStates', 'carParams',
-                               'liveCalibration', 'carState', 'liveDelay'])
+                               'liveCalibration', 'carState', 'liveDelay',
+                               'selfdriveState', 'longitudinalPlan', 'radarState',
+                               'driverMonitoringState'])
     # 预发几条消息，确保 socket 就绪
     for _ in range(5):
-        calib_msg = messaging.new_message('liveCalibration')
+        calib_msg = messaging.new_message('liveCalibration', valid=True)
         calib_msg.liveCalibration.validBlocks = 20
         calib_msg.liveCalibration.calStatus = 1
         calib_msg.liveCalibration.rpyCalib = [0.0, 0.0, 0.0]
@@ -119,7 +121,7 @@ def simulate_onroad(procs):
             pm.send('pandaStates', panda_msg)
 
             # 发送标定数据（关键：没有这个 modeld 的 transform 矩阵为零，车道线置信度极低）
-            calib_msg = messaging.new_message('liveCalibration')
+            calib_msg = messaging.new_message('liveCalibration', valid=True)
             calib_msg.liveCalibration.validBlocks = 20
             calib_msg.liveCalibration.calStatus = 1
             calib_msg.liveCalibration.rpyCalib = [0.0, 0.0, 0.0]
@@ -134,6 +136,25 @@ def simulate_onroad(procs):
             delay_msg = messaging.new_message('liveDelay')
             delay_msg.liveDelay.lateralDelay = 0.1
             pm.send('liveDelay', delay_msg)
+
+            # 发送 selfdriveState（UI 判断 openpilot 状态需要）
+            sds_msg = messaging.new_message('selfdriveState')
+            sds_msg.selfdriveState.enabled = False
+            sds_msg.selfdriveState.experimentalMode = False
+            pm.send('selfdriveState', sds_msg)
+
+            # 发送 longitudinalPlan（路径渲染需要）
+            lp_msg = messaging.new_message('longitudinalPlan')
+            lp_msg.longitudinalPlan.allowThrottle = True
+            pm.send('longitudinalPlan', lp_msg)
+
+            # 发送 radarState（可选，lead 指示器）
+            rs_msg = messaging.new_message('radarState')
+            pm.send('radarState', rs_msg)
+
+            # 发送 driverMonitoringState
+            dms_msg = messaging.new_message('driverMonitoringState')
+            pm.send('driverMonitoringState', dms_msg)
 
             # 检查 modelV2 输出
             sm.update(0)

@@ -7,6 +7,7 @@ from openpilot.common.filter_simple import FirstOrderFilter
 from openpilot.common.params import Params
 from openpilot.selfdrive.locationd.calibrationd import HEIGHT_INIT
 from openpilot.selfdrive.ui.ui_state import ui_state
+from openpilot.system.hardware import PC
 from openpilot.system.ui.lib.application import gui_app
 from openpilot.system.ui.lib.shader_polygon import draw_polygon, Gradient
 from openpilot.system.ui.widgets import Widget
@@ -83,9 +84,12 @@ class ModelRenderer(Widget):
   def _render(self, rect: rl.Rectangle):
     sm = ui_state.sm
 
-    # Check if data is up-to-date
-    if (sm.recv_frame["liveCalibration"] < ui_state.started_frame or
+    # Check if data is up-to-date (PC模式下放宽检查，允许初始帧差异)
+    if not PC and (sm.recv_frame["liveCalibration"] < ui_state.started_frame or
         sm.recv_frame["modelV2"] < ui_state.started_frame):
+      return
+
+    if PC and sm.recv_frame["modelV2"] == 0:
       return
 
     # Set up clipping region
