@@ -28,6 +28,8 @@ os.environ['USE_WEBCAM'] = '1'
 os.environ['PASSIVE'] = '1'
 os.environ['FINGERPRINT'] = 'VOLKSWAGEN_GOLF_MK7'
 os.environ['NOBOARD'] = '1'
+os.environ['BIG'] = '1'  # 使用大屏幕布局（MainLayout + AugmentedRoadView）
+os.environ.setdefault('SCALE', '0.5')  # 缩小窗口尺寸，降低 X11 转发压力
 
 # 视频文件路径
 DEMO_VIDEO = os.environ.get('WEBCAM_VIDEO',
@@ -59,9 +61,8 @@ def start_processes():
     """启动流水线关键进程"""
     procs = ['webcamerad', 'modeld']
 
-    # 如果需要 UI
-    if not os.environ.get('NO_UI'):
-        procs.append('ui')
+    # UI 不通过 manager 启动，而是在主进程中直接运行 AugmentedRoadView
+    # 这样避免了 manager 子进程中 SubMaster 收不到消息的时序问题
 
     # 先创建 PubMaster 并发送初始消息（确保 modeld 启动时已有 publisher 在线）
     global _pm
@@ -105,56 +106,7 @@ def simulate_onroad(procs):
 
     try:
         while True:
-            # 每次发送新的消息对象，避免重复写入警告
-            for s in ['controlsState', 'deviceState', 'carParams']:
-                msg = messaging.new_message(s)
-                if s == 'deviceState':
-                    msg.deviceState.started = True
-                    msg.deviceState.deviceType = HARDWARE.get_device_type()
-                elif s == 'carParams':
-                    msg.carParams.openpilotLongitudinalControl = True
-                pm.send(s, msg)
-
-            panda_msg = messaging.new_message('pandaStates', 1)
-            panda_msg.pandaStates[0].ignitionLine = True
-            panda_msg.pandaStates[0].pandaType = log.PandaState.PandaType.uno
-            pm.send('pandaStates', panda_msg)
-
-            # 发送标定数据（关键：没有这个 modeld 的 transform 矩阵为零，车道线置信度极低）
-            calib_msg = messaging.new_message('liveCalibration', valid=True)
-            calib_msg.liveCalibration.validBlocks = 20
-            calib_msg.liveCalibration.calStatus = 1
-            calib_msg.liveCalibration.rpyCalib = [0.0, 0.0, 0.0]
-            pm.send('liveCalibration', calib_msg)
-
-            # 发送车辆状态（给模型提供车速估计）
-            car_state_msg = messaging.new_message('carState')
-            car_state_msg.carState.vEgo = 20.0  # 模拟 72km/h
-            pm.send('carState', car_state_msg)
-
-            # 发送延迟信息
-            delay_msg = messaging.new_message('liveDelay')
-            delay_msg.liveDelay.lateralDelay = 0.1
-            pm.send('liveDelay', delay_msg)
-
-            # 发送 selfdriveState（UI 判断 openpilot 状态需要）
-            sds_msg = messaging.new_message('selfdriveState')
-            sds_msg.selfdriveState.enabled = False
-            sds_msg.selfdriveState.experimentalMode = False
-            pm.send('selfdriveState', sds_msg)
-
-            # 发送 longitudinalPlan（路径渲染需要）
-            lp_msg = messaging.new_message('longitudinalPlan')
-            lp_msg.longitudinalPlan.allowThrottle = True
-            pm.send('longitudinalPlan', lp_msg)
-
-            # 发送 radarState（可选，lead 指示器）
-            rs_msg = messaging.new_message('radarState')
-            pm.send('radarState', rs_msg)
-
-            # 发送 driverMonitoringState
-            dms_msg = messaging.new_message('driverMonitoringState')
-            pm.send('driverMonitoringState', dms_msg)
+            _send_sim_messages(pm)
 
             # 检查 modelV2 输出
             sm.update(0)
@@ -209,7 +161,103 @@ def main():
     print("[DEMO] 等待进程启动 (3秒)...")
     time.sleep(3)
 
-    simulate_onroad(procs)
+    if os.environ.get('NO_UI'):
+        # 纯终端模式：只打印 modelV2 数据
+        simulate_onroad(procs)
+    else:
+        # UI 模式：在主进程中运行 AugmentedRoadView
+        run_ui_with_overlay(procs)
+
+
+def run_ui_with_overlay(procs):
+    """在主进程中运行 UI + 车道线叠加（绕过 manager 子进程时序问题）"""
+    import pyray as rl
+    from openpilot.system.ui.lib.application import gui_app
+    from openpilot.selfdrive.ui.onroad.augmented_road_view import AugmentedRoadView
+    from openpilot.selfdrive.ui.ui_state import ui_state
+    from msgq.visionipc import VisionStreamType
+
+    global _pm
+    pm = _pm
+
+    gui_app.init_window("Lane Line Demo", fps=20)
+    road_view = AugmentedRoadView(VisionStreamType.VISION_STREAM_ROAD)
+    frame_count = 0
+
+    print("[DEMO-UI] 启动 UI 渲染循环，等待车道线叠加...")
+
+    try:
+        for should_render in gui_app.render():
+            # 发送模拟消息（每帧都发，确保 ui_state 的 SubMaster 能收到）
+            _send_sim_messages(pm)
+
+            # 更新 UI 状态（这里的 sm 是同进程的，一定能收到消息）
+            ui_state.update()
+
+            if should_render:
+                road_view.render(rl.Rectangle(0, 0, gui_app.width, gui_app.height))
+
+            frame_count += 1
+            if frame_count % 100 == 0:
+                sm = ui_state.sm
+                model_recv = sm.recv_frame.get('modelV2', 0)
+                print(f"[DEMO-UI] frame={frame_count} started={ui_state.started} "
+                      f"modelV2_recv={model_recv}")
+
+    except KeyboardInterrupt:
+        print("\n[DEMO-UI] 停止中...")
+    finally:
+        road_view.close()
+        for p in procs:
+            if p in managed_processes:
+                managed_processes[p].stop()
+        print("[DEMO-UI] 所有进程已停止")
+
+
+def _send_sim_messages(pm):
+    """发送所有模拟消息"""
+    for s in ['controlsState', 'deviceState', 'carParams']:
+        msg = messaging.new_message(s)
+        if s == 'deviceState':
+            msg.deviceState.started = True
+            msg.deviceState.deviceType = HARDWARE.get_device_type()
+        elif s == 'carParams':
+            msg.carParams.openpilotLongitudinalControl = True
+        pm.send(s, msg)
+
+    panda_msg = messaging.new_message('pandaStates', 1)
+    panda_msg.pandaStates[0].ignitionLine = True
+    panda_msg.pandaStates[0].pandaType = log.PandaState.PandaType.uno
+    pm.send('pandaStates', panda_msg)
+
+    calib_msg = messaging.new_message('liveCalibration', valid=True)
+    calib_msg.liveCalibration.validBlocks = 20
+    calib_msg.liveCalibration.calStatus = 1
+    calib_msg.liveCalibration.rpyCalib = [0.0, 0.0, 0.0]
+    pm.send('liveCalibration', calib_msg)
+
+    car_state_msg = messaging.new_message('carState')
+    car_state_msg.carState.vEgo = 20.0
+    pm.send('carState', car_state_msg)
+
+    delay_msg = messaging.new_message('liveDelay')
+    delay_msg.liveDelay.lateralDelay = 0.1
+    pm.send('liveDelay', delay_msg)
+
+    sds_msg = messaging.new_message('selfdriveState')
+    sds_msg.selfdriveState.enabled = False
+    sds_msg.selfdriveState.experimentalMode = False
+    pm.send('selfdriveState', sds_msg)
+
+    lp_msg = messaging.new_message('longitudinalPlan')
+    lp_msg.longitudinalPlan.allowThrottle = True
+    pm.send('longitudinalPlan', lp_msg)
+
+    rs_msg = messaging.new_message('radarState')
+    pm.send('radarState', rs_msg)
+
+    dms_msg = messaging.new_message('driverMonitoringState')
+    pm.send('driverMonitoringState', dms_msg)
 
 
 if __name__ == "__main__":
