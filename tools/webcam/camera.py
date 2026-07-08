@@ -2,8 +2,9 @@ import av
 import os
 import cv2 as cv
 
+
 class Camera:
-  def __init__(self, cam_type_state, stream_type, camera_id):
+  def __init__(self, cam_type_state, stream_type, camera_id, target_size=(1928, 1208)):
     try:
       camera_id = int(camera_id)
     except ValueError: # allow strings, ex: /dev/video0 or /path/to/video.mp4
@@ -20,10 +21,9 @@ class Camera:
     self.camera_id = camera_id
     self.cap = cv.VideoCapture(camera_id)
 
-    # 目标分辨率 — 必须与 DEVICE_CAMERAS 中的 intrinsics 对应
-    # PC 模式下 fcam 的原始分辨率是 1928x1208
-    self.target_W = 1928
-    self.target_H = 1208
+    # 目标分辨率 — 必须与 DEVICE_CAMERAS 中对应摄像头的 intrinsics 分辨率一致
+    # road(fcam) 与 wide(ecam) 可能不同，因此按摄像头独立传入
+    self.target_W, self.target_H = target_size
 
     if not self.is_video_file:
       self.cap.set(cv.CAP_PROP_FRAME_WIDTH, float(self.target_W))
@@ -50,13 +50,12 @@ class Camera:
             break
         else:
           break
-      # 视频文件缩放到目标分辨率
-      if self.is_video_file:
-        h, w = frame.shape[:2]
-        if w != self.target_W or h != self.target_H:
-          frame = cv.resize(frame, (self.target_W, self.target_H))
-      else:
-        # 摄像头模式翻转 180 度
+      # 缩放到目标分辨率（视频文件或摄像头实际输出与目标不一致时）
+      h, w = frame.shape[:2]
+      if w != self.target_W or h != self.target_H:
+        frame = cv.resize(frame, (self.target_W, self.target_H))
+      # 实体摄像头按需翻转 180 度（安装方向），视频文件不翻转
+      if not self.is_video_file and os.getenv("CAM_FLIP", "1") == "1":
         frame = cv.flip(frame, -1)
       yuv = Camera.bgr2nv12(frame)
       yield yuv.data.tobytes()

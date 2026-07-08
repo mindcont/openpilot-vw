@@ -35,6 +35,10 @@ DISCONNECT_TIMEOUT = 5.  # wait 5 seconds before going offroad after disconnect 
 PANDA_STATES_TIMEOUT = round(1000 / SERVICE_LIST['pandaStates'].frequency * 1.5)  # 1.5x the expected pandaState frequency
 ONROAD_CYCLE_TIME = 1  # seconds to wait offroad after requesting an onroad cycle
 
+# FORCE_ONROAD: 无 panda 硬件的平台（PC / Jetson Orin NX 等）强制进入 onroad 状态，
+# 使 modeld/UI 等 only_onroad 进程正常拉起，用于纯视觉车道线预测（不控车）
+FORCE_ONROAD = os.getenv("FORCE_ONROAD") is not None
+
 ThermalBand = namedtuple("ThermalBand", ['min_temp', 'max_temp'])
 HardwareState = namedtuple("HardwareState", ['network_type', 'network_info', 'network_strength', 'network_stats',
                                              'network_metered', 'modem_temps'])
@@ -237,6 +241,10 @@ def hardware_thread(end_event, hw_queue) -> None:
       if onroad_conditions["ignition"]:
         onroad_conditions["ignition"] = False
         cloudlog.error("panda timed out onroad")
+
+    # 无 panda 硬件的平台（Jetson Orin NX / PC 纯视觉模式）强制点火，使系统进入 onroad
+    if FORCE_ONROAD:
+      onroad_conditions["ignition"] = True
 
     # Run at 2Hz, plus either edge of ignition
     ign_edge = (started_ts is not None) != all(onroad_conditions.values())

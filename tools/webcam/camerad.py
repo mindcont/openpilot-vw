@@ -42,30 +42,47 @@ from openpilot.tools.webcam.camera import Camera
 from openpilot.common.realtime import Ratekeeper
 
 # 环境变量配置摄像头设备ID
-# ROAD_CAM: 主摄像头（前视），默认使用设备0
+# ROAD_CAM: 主摄像头（前视窄视野/长焦），默认使用设备0
 ROAD_CAM = os.getenv("ROAD_CAM", "0")
-# WIDE_CAM: 广角摄像头（可选）
+# WIDE_CAM: 广角摄像头（宽视野），默认使用设备1
 WIDE_CAM = os.getenv("WIDE_CAM", "1")
 # DRIVER_CAM: 驾驶员监控摄像头（可选）
 DRIVER_CAM = os.getenv("DRIVER_CAM")
 
-# 摄像头类型定义：包含消息名称、流类型和摄像头ID
-CameraType = namedtuple("CameraType", ["msg_name", "stream_type", "cam_id"])
+# 每个摄像头的目标分辨率（宽x高），必须与 DEVICE_CAMERAS 中对应 intrinsics 分辨率一致
+# 默认使用 comma 硬件 AR/OX 传感器参数：road=1928x1208, wide=1928x1208
+def _parse_size(env_name, default):
+  val = os.getenv(env_name)
+  if not val:
+    return default
+  try:
+    w, h = val.lower().split("x")
+    return (int(w), int(h))
+  except (ValueError, AttributeError):
+    print(f"[camerad] 无法解析 {env_name}={val}，使用默认 {default}")
+    return default
+
+ROAD_CAM_SIZE = _parse_size("ROAD_CAM_SIZE", (1928, 1208))
+WIDE_CAM_SIZE = _parse_size("WIDE_CAM_SIZE", (1928, 1208))
+DRIVER_CAM_SIZE = _parse_size("DRIVER_CAM_SIZE", (1928, 1208))
+
+# 摄像头类型定义：包含消息名称、流类型、摄像头ID和目标分辨率
+CameraType = namedtuple("CameraType", ["msg_name", "stream_type", "cam_id", "size"])
 
 # 摄像头配置列表
 # 至少包含主摄像头，根据环境变量添加其他摄像头
 CAMERAS = [
   # 主摄像头：发布 roadCameraState 消息，使用 ROAD 流类型
-  CameraType("roadCameraState", VisionStreamType.VISION_STREAM_ROAD, ROAD_CAM)
+  CameraType("roadCameraState", VisionStreamType.VISION_STREAM_ROAD, ROAD_CAM, ROAD_CAM_SIZE)
 ]
 # 如果配置了广角摄像头，添加到列表
 if WIDE_CAM:
-  CAMERAS.append(CameraType("wideRoadCameraState", VisionStreamType.VISION_STREAM_WIDE_ROAD, WIDE_CAM))
-  print(f"添加广角摄像头: {WIDE_CAM}")
+  CAMERAS.append(CameraType("wideRoadCameraState", VisionStreamType.VISION_STREAM_WIDE_ROAD, WIDE_CAM, WIDE_CAM_SIZE))
+  print(f"添加广角摄像头: {WIDE_CAM} ({WIDE_CAM_SIZE[0]}x{WIDE_CAM_SIZE[1]})")
 # 如果配置了驾驶员监控摄像头，添加到列表
 if DRIVER_CAM:
-  CAMERAS.append(CameraType("driverCameraState", VisionStreamType.VISION_STREAM_DRIVER, DRIVER_CAM))
-  print(f"添加驾驶员摄像头: {DRIVER_CAM}")
+  CAMERAS.append(CameraType("driverCameraState", VisionStreamType.VISION_STREAM_DRIVER, DRIVER_CAM, DRIVER_CAM_SIZE))
+  print(f"添加驾驶员摄像头: {DRIVER_CAM} ({DRIVER_CAM_SIZE[0]}x{DRIVER_CAM_SIZE[1]})")
 
 class Camerad:
   """摄像头守护进程主类
@@ -95,8 +112,8 @@ class Camerad:
       else:
         cam_device = c.cam_id
 
-      # 创建摄像头对象
-      cam = Camera(c.msg_name, c.stream_type, cam_device)
+      # 创建摄像头对象（传入该摄像头的目标分辨率）
+      cam = Camera(c.msg_name, c.stream_type, cam_device, target_size=c.size)
       self.cameras.append(cam)
 
       # 为每个摄像头流创建共享内存缓冲区

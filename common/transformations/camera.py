@@ -1,4 +1,5 @@
 import itertools
+import os
 import numpy as np
 from dataclasses import dataclass
 
@@ -52,6 +53,36 @@ _ar_ox_config = DeviceCameraConfig(CameraConfig(1928, 1208, 2648.0), _ar_ox_fish
 _os_config = DeviceCameraConfig(CameraConfig(2688 // 2, 1520 // 2, 1522.0 * 3 / 4), _os_fisheye, _os_fisheye)
 _neo_config = DeviceCameraConfig(CameraConfig(1164, 874, 910.0), CameraConfig(816, 612, 650.0), _NoneCameraConfig())
 
+
+def _pc_config_from_env():
+  """
+  为无 comma 硬件的平台（PC / Jetson Orin NX 等自定义摄像头）提供 intrinsics 覆盖。
+
+  通过环境变量注入实测标定的摄像头内参，格式为 "宽,高,焦距(px)"：
+    ROAD_CAM_INTRINSICS  前视窄视野/长焦摄像头（fcam），默认 comma AR/OX: 1928,1208,2648
+    WIDE_CAM_INTRINSICS  前视宽视野摄像头（ecam），默认 comma 鱼眼: 1928,1208,567
+
+  焦距 focal_length(px) = 焦距(mm) / 像元尺寸(mm)，或通过棋盘格标定得到的 fx。
+  分辨率必须与 webcamerad 实际输出（ROAD_CAM_SIZE/WIDE_CAM_SIZE）一致，否则车道线投影错位。
+  """
+  def _parse(env_name, default: CameraConfig):
+    val = os.getenv(env_name)
+    if not val:
+      return default
+    try:
+      w, h, f = val.split(",")
+      return CameraConfig(int(w), int(h), float(f))
+    except (ValueError, AttributeError):
+      print(f"[transformations.camera] 无法解析 {env_name}={val}，使用默认值")
+      return default
+
+  fcam = _parse("ROAD_CAM_INTRINSICS", CameraConfig(1928, 1208, 2648.0))
+  ecam = _parse("WIDE_CAM_INTRINSICS", _ar_ox_fisheye)
+  return DeviceCameraConfig(fcam, ecam, ecam)
+
+
+_pc_config = _pc_config_from_env()
+
 DEVICE_CAMERAS = {
   # A "device camera" is defined by a device type and sensor
 
@@ -64,10 +95,10 @@ DEVICE_CAMERAS = {
   ("unknown", "ar0231"): _ar_ox_config,
   ("unknown", "ox03c10"): _ar_ox_config,
 
-  # simulator (emulates a tici)
-  ("pc", "unknown"): _ar_ox_config,
+  # PC / Jetson Orin NX 等：默认沿用 comma AR/OX 参数，可用环境变量覆盖为实测标定值
+  ("pc", "unknown"): _pc_config,
   # PC with ox03c10 sensor support
-  ("pc", "ox03c10"): _ar_ox_config,
+  ("pc", "ox03c10"): _pc_config,
 }
 prods = itertools.product(('tici', 'tizi', 'mici'), (('ar0231', _ar_ox_config), ('ox03c10', _ar_ox_config), ('os04c10', _os_config)))
 DEVICE_CAMERAS.update({(d, c[0]): c[1] for d, c in prods})
