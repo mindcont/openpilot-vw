@@ -92,6 +92,13 @@ class ModelRenderer(Widget):
     if PC and sm.recv_frame["modelV2"] == 0:
       return
 
+    # PC调试：每100帧打印一次渲染状态
+    if PC and sm.frame % 100 == 0:
+      print(f"[ModelRenderer] frame={sm.frame} modelV2_recv={sm.recv_frame['modelV2']} "
+            f"transform_diag={list(np.diag(self._car_space_transform)):.4g} "
+            f"path_pts={self._path.raw_points.shape[0]} "
+            f"lane0_proj={self._lane_lines[0].projected_points.shape}")
+
     # Set up clipping region
     self._clip_region = rl.Rectangle(
       rect.x - CLIP_MARGIN, rect.y - CLIP_MARGIN, rect.width + 2 * CLIP_MARGIN, rect.height + 2 * CLIP_MARGIN
