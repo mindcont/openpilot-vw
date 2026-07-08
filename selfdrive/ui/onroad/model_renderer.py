@@ -265,8 +265,9 @@ class ModelRenderer(Widget):
       if lane_line.projected_points.size == 0:
         continue
 
+      # 车道线用蓝色叠加（alpha 随置信度变化）
       alpha = np.clip(self._lane_line_probs[i], 0.0, 0.7)
-      color = rl.Color(255, 255, 255, int(alpha * 255))
+      color = rl.Color(0, 150, 255, int(alpha * 255))
       draw_polygon(self._rect, lane_line.projected_points, color)
 
     for i, road_edge in enumerate(self._road_edges):
