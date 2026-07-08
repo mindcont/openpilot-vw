@@ -8,13 +8,16 @@
 | 项 | 状态 | 说明 |
 |----|------|------|
 | 框架代码改动 | ✅ 已完成并提交 | FORCE_ONROAD / 双摄像头 / intrinsics 覆盖 |
-| 生产启动脚本 | ✅ 已完成 | `start_openpilot_orinnx.sh` |
+| 生产启动脚本 | ✅ 已完成 | `start_openpilot_orinnx.sh`（含跳过 onboarding）|
 | PC demo 路径 | ✅ 已验证 | `run_laneline_demo.py`（绕过 manager，能看到车道线）|
+| 静态代码走查 | ✅ 已完成 | 见第七节，已排出 7 个风险点并修复其一 |
+| onboarding 阻塞 | ✅ 已修复 | 启动脚本自动写入 terms/training 参数（原会卡死首次 onroad）|
 | **manager 正规流程** | ⚠️ **未实测** | 代码已改，但走 manager 的完整链路尚未在实机跑通 |
 | **Orin NX 实机** | ⚠️ **未验证** | 设备号 / 双摄像头 / intrinsics 标定需在目标硬件完成 |
 
-**结论**：框架代码已就绪，但「在 Orin NX 上直接运行」还需在实机完成设备配置、
-摄像头标定，并首次跑通 manager 流程后才能确认。下面是完成这些步骤的方法。
+**结论**：框架代码已就绪，静态走查已把「首次进 onroad 被 onboarding 卡死」这个必现
+阻塞修掉（见第七节发现 1）。剩余需在实机确认的是设备配置、摄像头标定、`card` 是否
+正常写 CarParams，以及双摄同步表现。下面是完成这些步骤的方法。
 
 ## 二、架构：demo vs 生产
 
@@ -107,6 +110,13 @@ cd /home/wio/openpilot
 manager 会自动拉起 webcamerad → modeld → ui。首次启动 tinygrad 需编译 kernel，
 Orin NX 上通常数十秒。
 
+> **首跑建议用单摄模式**（规避双摄同步/带宽问题，见第七节发现 3）：
+> ```bash
+> SINGLE_CAM=1 ./start_openpilot_orinnx.sh
+> ```
+> 单摄模式只用 road 相机，禁用 wide；确认能出 modelV2/车道线后，再改回双摄
+> （去掉 `SINGLE_CAM=1` 或设 `SINGLE_CAM=0`）。
+
 ## 五、验证与排查
 
 ### 确认 modeld 产出车道线
@@ -129,10 +139,12 @@ for _ in range(40):
 | 现象 | 原因 | 处理 |
 |------|------|------|
 | modeld 未启动 | 未进 onroad | 确认 `FORCE_ONROAD=1` |
+| 日志刷 `Startup blocked` | 未接受 terms/training（onboarding）| 启动脚本已自动写入；手动跑见发现 1 |
 | onroad 启动被阻塞 | 设了 IsDriverViewEnabled | 清除该参数，勿设 |
+| modeld 卡住不出 modelV2 | 等 CarParams（card 没起/没写）| 见发现 4，确认 `card` 正常启动 |
 | laneLineProbs≈0 | intrinsics/分辨率错 | 重新标定，三处分辨率对齐 |
 | 车道线上下颠倒 | 安装方向 | 调 `CAM_FLIP` |
-| 双摄像头帧不同步 | 两路时间戳漂移 | 见下方限制 |
+| 双摄像头帧不同步 | 两路时间戳漂移 | 见发现 3，先用单 road 相机 |
 | UI 黑屏 | 无显示/GL | 确认接了屏，JetPack GL 正常 |
 
 ## 六、已知限制 / 未验证点（需实机确认）
@@ -148,3 +160,90 @@ for _ in range(40):
    去畸变处理（当前未做）。
 5. **标定 rpy 外参**：当前用固定 rpy=[0,0,0]（假设摄像头水平正装）。若安装有俯仰/
    偏航角，车道线会整体偏移，需要真实标定外参或手工微调。
+
+## 七、静态代码走查（demo → 生产链路，实机前预排风险）
+
+对 `launch_openpilot.sh → manager → hardwared → modeld → ui` 整条链路做了一次静态
+走查，重点排 demo 绕过 manager 时没触发、但正规流程会遇到的坑。以下发现均标注了
+代码位置，可按图索骥。
+
+### 启动链路（已确认）
+
+```
+launch_openpilot.sh → manager
+  → hardwared 发布 deviceState.started
+  → manager 用 started 驱动 only_onroad(modeld) 与 driverview(webcamerad)
+  → modeld 读 相机帧 + CarParams + 标定 → 发 modelV2
+  → ui 订阅 modelV2 → AugmentedRoadView / model_renderer 画车道线
+```
+
+### 发现 1 —— 高危 · 首次进 onroad 被 onboarding 参数卡死【已修复】
+
+- 位置：`system/hardware/hardwared.py:314,318`；默认值 `common/params_keys.h:27,56`
+- 现象：`started_ts is None`（首次启动）时 `should_start` 要求 **全部** `startup_conditions`
+  为真，其中 `accepted_terms`（`HasAcceptedTerms == terms_version`）与
+  `completed_training`（`CompletedTrainingVersion == training_version`）在全新设备上默认
+  是 `"0"`，不满足 → `deviceState.started` 恒为 False → `modeld`(only_onroad) 不被拉起
+  → 看不到车道线，日志刷 `"Startup blocked"`。
+- 关键点：`FORCE_ONROAD` 只覆盖 `onroad_conditions["ignition"]`，**解决不了**
+  `startup_conditions`。demo 绕过 manager 从没触发这条。
+- 修复：`start_openpilot_orinnx.sh` 启动前用 python 写入这两个参数（做法同官方测试
+  脚手架 `selfdrive/test/helpers.py:21-22`）。已随本次提交生效。
+
+### 发现 2 —— 好消息 · PC 模式适配在 Orin NX 上确实生效
+
+- 位置：`system/hardware/__init__.py:11` → `PC = not TICI`。Jetson 无 `/TICI` 文件 →
+  **`PC=True`**。
+- 因此靠常量 `PC` 判断的适配全部生效：
+  - `selfdrive/modeld/modeld.py`：默认标定分支运行，用 `DEVICE_CAMERAS[('pc','unknown')]`，
+    该 entry 即 `transformations/camera.py:79-80,113` 的 `_pc_config_from_env()` →
+    **你的 `ROAD_CAM_INTRINSICS`/`WIDE_CAM_INTRINSICS` 确实注入了 modeld 的标定矩阵**。
+  - `ui_state.py:139`、`augmented_road_view.py:148,155`、`model_renderer.py:92` 均 import
+    硬件常量 `PC`（非环境变量），在 Jetson 上一致生效。
+- 注意不一致：`system/manager/process_config.py` 的 `driverview()` 用的是
+  `os.getenv("PC")`（环境变量，脚本未设），所以「PC+WEBCAM 摄像头常开」分支不会走，
+  `webcamerad` 改为随 `started` 一起起。不致命，知悉即可。
+
+### 发现 3 —— 中危 · 双摄同步脆弱
+
+- 位置：`tools/webcam/camerad.py`（`_send_yuv`：`eof = frame_id * 0.05 * 1e9`）；
+  `selfdrive/modeld/modeld.py` 主循环配对逻辑。
+- 时间戳是**帧号推算**而非真实采集时间；两摄像头各自线程、各自 `frame_id` 与
+  `Ratekeeper(20)`。modeld out-of-sync 报错阈值 10ms，而一帧 50ms → 差 1 帧即刷错误；
+  且 `vipc_client_extra` 非阻塞，wide 跟不上时 `recv()` 返 None → modeld 跳过整轮 →
+  modelV2 停更 → 车道线卡住。
+- 风险：两路 1928×1208@20fps NV12 走 USB 带宽压力大，实机大概率喂不满。
+- 建议：纯车道线展示优先**单 road 相机**（wide 流缺席时 modeld 自动走
+  `use_extra_client=False` 单摄路径，更稳）；或降分辨率；坚持双摄则改用真实采集时间戳。
+
+### 发现 4 —— 中危 · modeld 阻塞等 CarParams
+
+- 位置：`selfdrive/modeld/modeld.py` → `params.get("CarParams", block=True)`。
+- 生产模式（非 `--demo`）会**阻塞**直到 `card`(only_onroad) 写入 CarParams。链路：
+  onroad → card → 写 CarParams → modeld 解阻塞。若 `card` 在
+  `VOLKSWAGEN_GOLF_MK7 + SKIP_FW_QUERY + NOBOARD` 组合下起不来或不写 CarParams，
+  modeld 会永久挂住。实机需确认 `card` 正常启动并写了 CarParams。
+
+### 发现 5 —— 低危 · CAM_FLIP 默认值反直觉
+
+- 位置：`tools/webcam/camera.py:58` → `os.getenv("CAM_FLIP", "1")` 默认翻转。
+- 脚本已显式设 `CAM_FLIP=0`；脱离脚本裸跑会默认倒转 180°。
+
+### 发现 6 —— 低危 · modeld PC 标定分支假设 road=main
+
+- 位置：`selfdrive/modeld/modeld.py` 的 `if PC:` 分支硬编码 `fcam→main / ecam→extra`，
+  未看 `main_wide_camera`。双摄都在时 main=road，正确；仅 wide 单摄时会用错内参。
+  当前双摄场景无影响。
+
+### 发现 7 —— 低危 · NOBOARD 下 pandad 仍运行
+
+- 位置：`system/manager/process_config.py`（pandad 为 `always_run`）；
+  `hardwared.py` 中 `FORCE_ONROAD` 在超时把 ignition 置 False 后仍每轮覆盖为 True。
+- 结论：pandad 无 panda 时可能报错但不会阻塞 onroad（FORCE_ONROAD 每轮胜出）。
+
+### 优先级建议
+
+1. 发现 1 已修复（启动脚本自动跳过 onboarding）——这是首次实机第一个必现卡点。
+2. 首跑先用**单 road 相机**验证链路通：`SINGLE_CAM=1 ./start_openpilot_orinnx.sh`，
+   跑通后再上双摄（规避发现 3/4）。
+3. 实机确认 `card` 正常写 CarParams（发现 4）。

@@ -30,6 +30,17 @@ if [ -d "$VENV_PATH" ]; then
 fi
 
 # ============================================================
+# 单摄验证模式开关
+# ------------------------------------------------------------
+# SINGLE_CAM=1 时只用 road 单摄，禁用 wide 摄像头。
+# 首次实机建议先跑单摄跑通链路（规避双摄同步/带宽问题，见部署指南发现 3/4），
+# 确认能出 modelV2/车道线后，再改回双摄（SINGLE_CAM=0）。
+# 可从外部覆盖：  SINGLE_CAM=1 ./start_openpilot_orinnx.sh
+# 原理：webcamerad 的 camerad.py 用 `if WIDE_CAM:` 判断是否加宽角摄像头，
+#      置空 WIDE_CAM 即只保留 road；modeld 检测到无 wide 流会自动走单摄路径。
+export SINGLE_CAM=${SINGLE_CAM:-0}
+
+# ============================================================
 # 摄像头配置（★ 需按实机调整 ★）
 # ============================================================
 # 设备号：用 `v4l2-ctl --list-devices` 查询后填写
@@ -49,6 +60,11 @@ export WIDE_CAM_INTRINSICS="1928,1208,567"
 # 摄像头安装方向：正装=0，倒装（180°）=1
 export CAM_FLIP=0
 
+# 单摄模式：置空 WIDE_CAM 以禁用宽角摄像头（camerad.py 的 `if WIDE_CAM:` 判空）
+if [ "$SINGLE_CAM" = "1" ]; then
+  export WIDE_CAM=""
+fi
+
 # ============================================================
 # 运行模式
 # ============================================================
@@ -67,11 +83,35 @@ export BIG=1               # 大屏 UI 布局（MainLayout + AugmentedRoadView�
 export LOGPRINT=info
 export OPENPILOT_DATA=/tmp/data
 
+# ============================================================
+# 跳过 onboarding（★ 首次跑通 manager 流程必做 ★）
+# ------------------------------------------------------------
+# hardwared 的 startup_conditions 在「首次进 onroad」时要求：
+#   HasAcceptedTerms        == terms_version
+#   CompletedTrainingVersion == training_version
+# 全新设备这两个参数默认是 "0"，不满足 -> should_start=False ->
+# deviceState.started 一直为 False -> modeld(only_onroad) 不会被拉起 ->
+# 看不到车道线（日志里会刷 "Startup blocked"）。
+# FORCE_ONROAD 只解决 ignition，解决不了 startup_conditions，所以这里补上。
+# 做法与官方测试脚手架 selfdrive/test/helpers.py 一致。
+python3 - <<'PY'
+from openpilot.common.params import Params
+from openpilot.system.version import terms_version, training_version
+p = Params()
+p.put("HasAcceptedTerms", terms_version)
+p.put("CompletedTrainingVersion", training_version)
+print(f"[orinnx] onboarding 已跳过: terms={terms_version} training={training_version}")
+PY
+
 echo "=================================================="
 echo "  openpilot-vw  Jetson Orin NX  车道线预测"
 echo "=================================================="
 echo "  road cam : /dev/video${ROAD_CAM}  ${ROAD_CAM_SIZE}  K=${ROAD_CAM_INTRINSICS}"
-echo "  wide cam : /dev/video${WIDE_CAM}  ${WIDE_CAM_SIZE}  K=${WIDE_CAM_INTRINSICS}"
+if [ "$SINGLE_CAM" = "1" ]; then
+  echo "  wide cam : 已禁用（单摄验证模式 SINGLE_CAM=1）"
+else
+  echo "  wide cam : /dev/video${WIDE_CAM}  ${WIDE_CAM_SIZE}  K=${WIDE_CAM_INTRINSICS}"
+fi
 echo "  FORCE_ONROAD=1  PASSIVE=1  NOBOARD=1"
 echo "=================================================="
 
