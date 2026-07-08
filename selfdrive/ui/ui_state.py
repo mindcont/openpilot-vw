@@ -139,15 +139,6 @@ class UIState:
     if PC and self.sm["deviceState"].started:
       self.started = True
 
-    # PC调试：诊断 started 状态
-    if PC and self.sm.frame % 200 == 0:
-      with open('/tmp/ui_state_debug.log', 'a') as f:
-        f.write(f"sm.frame={self.sm.frame} deviceState.started={self.sm['deviceState'].started} "
-                f"ignition={self.ignition} panda_type={self.panda_type} "
-                f"ds_recv={self.sm.recv_frame.get('deviceState',0)} "
-                f"ps_recv={self.sm.recv_frame.get('pandaStates',0)} "
-                f"started={self.started}\n")
-
     # Update recording audio state
     self.recording_audio = self.params.get_bool("RecordAudio") and self.started
 

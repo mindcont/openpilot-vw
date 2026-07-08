@@ -59,22 +59,6 @@ class AugmentedRoadView(CameraView):
     if not ui_state.started:
       return
 
-    # PC调试：定期打印 UI 状态到文件
-    if PC and hasattr(self, '_debug_count'):
-      self._debug_count += 1
-    elif PC:
-      self._debug_count = 0
-
-    if PC and self._debug_count % 60 == 0:
-      sm = ui_state.sm
-      with open('/tmp/ui_debug.log', 'a') as f:
-        f.write(f"frame={self._debug_count} started={ui_state.started} "
-                f"modelV2_recv={sm.recv_frame.get('modelV2',0)} "
-                f"calib_recv={sm.recv_frame.get('liveCalibration',0)} "
-                f"device_camera={self.device_camera is not None} "
-                f"transform_set={not np.allclose(self.model_renderer._car_space_transform, 0)} "
-                f"lane0_proj_size={self.model_renderer._lane_lines[0].projected_points.shape}\n")
-
     self._switch_stream_if_needed(ui_state.sm)
 
     # Update calibration before rendering
