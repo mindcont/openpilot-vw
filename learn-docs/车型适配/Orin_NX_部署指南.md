@@ -117,7 +117,51 @@ Orin NX 上通常数十秒。
 > 单摄模式只用 road 相机，禁用 wide；确认能出 modelV2/车道线后，再改回双摄
 > （去掉 `SINGLE_CAM=1` 或设 `SINGLE_CAM=0`）。
 
-## 五、验证与排查
+## 五、七寸屏显示配置与 CAN 调试
+
+### 七寸屏(1024×600)显示
+
+openpilot UI 原生逻辑分辨率是 **2160×1080**(comma 大屏)。7 寸屏用 `MID_UI`：
+复用大屏布局(MainLayout，功能全、含车道线叠加)，**等比缩放**到目标物理尺寸，不变形。
+
+```bash
+export MID_UI=1                 # 启用中屏模式
+export MID_UI_SIZE=1024x600     # 目标物理分辨率(默认即 1024x600)
+```
+
+原理：`scale = min(1024/2160, 600/1080) = 0.474`，窗口 1024×512(x/y 同一 scale
+故不变形)，7 寸屏底部约 88px 空白/黑边。`start_openpilot_orinnx.sh` 已默认 `MID_UI=1`。
+
+三种显示模式对比：
+
+| 模式 | 环境变量 | 逻辑分辨率 | 适用 |
+|------|---------|-----------|------|
+| 大屏 | `BIG=1` | 2160×1080 | comma 3X / 桌面全屏 |
+| **中屏** | `MID_UI=1` | 2160×1080→等比缩放 | **7 寸屏 1024×600** |
+| 小屏 | (默认) | 536×240 | mici 设备 |
+
+> 实现见 `system/ui/lib/application.py`：`MID_UI` 使 `big_ui()=True`（用 MainLayout
+> 与大屏字体），并在 `__init__` 按 `MID_UI_SIZE` 等比设定 scale。
+
+### CAN 调试叠加
+
+`CAN_DEBUG=1` 时，onroad 画面左上角叠加半透明面板，实时显示 CAN 关键变量，
+方便实车调试：
+
+```bash
+export CAN_DEBUG=1
+```
+
+显示内容（来自 `CarState`，由 `vw_mqb.dbc` 解析）：
+- 车速 vEgo / 仪表车速、方向盘角度、方向盘力矩、档位
+- 油门/刹车、踏板状态、静止标志、转向灯、巡航状态、latActive
+- 关键消息 alive/valid：carState / modelV2 / liveCalibration / pandaStates / carControl
+
+实现：`selfdrive/ui/onroad/can_debug_overlay.py`（`CanDebugOverlay`），
+在 `AugmentedRoadView` 的自定义叠加扩展点渲染。PC 验证也可用：
+`CAN_DEBUG=1 python3 run_laneline_demo.py`。
+
+## 六、验证与排查
 
 ### 确认 modeld 产出车道线
 ```bash
@@ -147,7 +191,7 @@ for _ in range(40):
 | 双摄像头帧不同步 | 两路时间戳漂移 | 见发现 3，先用单 road 相机 |
 | UI 黑屏 | 无显示/GL | 确认接了屏，JetPack GL 正常 |
 
-## 六、已知限制 / 未验证点（需实机确认）
+## 七、已知限制 / 未验证点（需实机确认）
 
 1. **manager 正规流程首次跑通未验证**：FORCE_ONROAD 代码已加，但没在实机用
    manager 完整跑过。首次启动需重点确认 modeld 是否被 `only_onroad` 条件正常拉起。

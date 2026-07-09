@@ -1,4 +1,5 @@
 import time
+import os
 import numpy as np
 import pyray as rl
 from cereal import log, messaging
@@ -50,6 +51,12 @@ class AugmentedRoadView(CameraView):
     self.alert_renderer = AlertRenderer()
     self.driver_state_renderer = DriverStateRenderer()
 
+    # CAN 调试叠加(环境变量 CAN_DEBUG=1 启用),显示 CAN 总线关键变量
+    self._can_debug = None
+    if os.getenv("CAN_DEBUG") == "1":
+      from openpilot.selfdrive.ui.onroad.can_debug_overlay import CanDebugOverlay
+      self._can_debug = CanDebugOverlay()
+
     # debug
     self._pm = messaging.PubMaster(['uiDebug'])
 
@@ -92,6 +99,8 @@ class AugmentedRoadView(CameraView):
 
     # Custom UI extension point - add custom overlays here
     # Use self._content_rect for positioning within camera bounds
+    if self._can_debug is not None:
+      self._can_debug.render(self._content_rect)
 
     # End clipping region
     rl.end_scissor_mode()

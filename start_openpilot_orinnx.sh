@@ -74,7 +74,11 @@ export PASSIVE=1           # 被动模式，仅观察不输出控制
 export NOBOARD=1           # 无 panda 硬件
 export SKIP_FW_QUERY=1     # 跳过车辆固件查询
 export FINGERPRINT="VOLKSWAGEN_SAGITAR_MK7"  # 速腾正式车型指纹（MQB 平台，轴距2.731）
-export BIG=1               # 大屏 UI 布局（MainLayout + AugmentedRoadView）
+# 显示配置（7 寸屏 1024×600 用 MID_UI；comma 大屏/桌面全屏用 BIG）
+export MID_UI=1                 # 7寸屏 1024×600：等比缩放大屏布局(MainLayout)，不变形
+export MID_UI_SIZE=1024x600     # 目标物理分辨率，其他尺寸屏可改
+# export BIG=1                  # 备选：2160×1080 大屏/桌面
+# export CAN_DEBUG=1            # 可选：onroad 画面叠加显示 CAN 关键变量(调试用)
 
 # ★ 注意：切勿设置 IsDriverViewEnabled=True ★
 #   它会使 startup_conditions["not_driver_view"]=False 从而阻塞 onroad 启动。
@@ -113,6 +117,7 @@ else
   echo "  wide cam : /dev/video${WIDE_CAM}  ${WIDE_CAM_SIZE}  K=${WIDE_CAM_INTRINSICS}"
 fi
 echo "  FORCE_ONROAD=1  PASSIVE=1  NOBOARD=1"
+echo "  显示: MID_UI=${MID_UI:-0} (${MID_UI_SIZE:-})  BIG=${BIG:-0}  CAN_DEBUG=${CAN_DEBUG:-0}"
 echo "=================================================="
 
 # 走正规 manager 流程：manager 会根据条件自动拉起

@@ -30,6 +30,19 @@ MAX_TOUCH_SLOTS = 2
 TOUCH_HISTORY_TIMEOUT = 3.0  # Seconds before touch points fade out
 
 BIG_UI = os.getenv("BIG", "0") == "1"
+MID_UI = os.getenv("MID_UI", "0") == "1"  # 中屏(如7寸1024×600):复用大屏布局并等比缩放
+
+
+def _parse_mid_size() -> tuple[int, int]:
+  # 目标物理分辨率,格式 "宽x高",默认 7 寸屏 1024x600
+  try:
+    w, h = os.getenv("MID_UI_SIZE", "1024x600").lower().split("x")
+    return int(w), int(h)
+  except (ValueError, AttributeError):
+    return 1024, 600
+
+
+MID_UI_SIZE = _parse_mid_size()
 ENABLE_VSYNC = os.getenv("ENABLE_VSYNC", "0") == "1"
 SHOW_FPS = os.getenv("SHOW_FPS") == "1"
 SHOW_TOUCHES = os.getenv("SHOW_TOUCHES") == "1"
@@ -83,7 +96,7 @@ DEFAULT_TEXT_COLOR = rl.Color(255, 255, 255, int(255 * 0.9))
 
 # Qt draws fonts accounting for ascent/descent differently, so compensate to match old styles
 # The real scales for the fonts below range from 1.212 to 1.266
-FONT_SCALE = 1.242 if BIG_UI else 1.16
+FONT_SCALE = 1.242 if (BIG_UI or MID_UI) else 1.16
 
 ASSETS_DIR = files("openpilot.selfdrive").joinpath("assets")
 FONT_DIR = ASSETS_DIR.joinpath("fonts")
@@ -91,7 +104,7 @@ FONT_DIR = ASSETS_DIR.joinpath("fonts")
 
 class FontWeight(StrEnum):
   LIGHT = "Inter-Light.fnt"
-  NORMAL = "Inter-Regular.fnt" if BIG_UI else "Inter-Medium.fnt"
+  NORMAL = "Inter-Regular.fnt" if (BIG_UI or MID_UI) else "Inter-Medium.fnt"
   MEDIUM = "Inter-Medium.fnt"
   BOLD = "Inter-Bold.fnt"
   SEMI_BOLD = "Inter-SemiBold.fnt"
@@ -198,7 +211,14 @@ class GuiApplication:
     self._width = width if width is not None else GuiApplication._default_width()
     self._height = height if height is not None else GuiApplication._default_height()
 
-    if PC and os.getenv("SCALE") is None:
+    if os.getenv("SCALE") is not None:
+      self._scale = SCALE
+    elif MID_UI:
+      # 中屏(如 7 寸 1024×600):等比缩放大屏逻辑分辨率(2160×1080)到目标物理尺寸,
+      # x/y 用同一 scale 保证不变形,窗口略低于屏高时底部留少量空白/黑边
+      tw, th = MID_UI_SIZE
+      self._scale = min(tw / self._width, th / self._height)
+    elif PC:
       self._scale = self._calculate_auto_scale()
     else:
       self._scale = SCALE
@@ -735,7 +755,7 @@ class GuiApplication:
 
   @staticmethod
   def big_ui() -> bool:
-    return HARDWARE.get_device_type() in ('tici', 'tizi') or BIG_UI
+    return HARDWARE.get_device_type() in ('tici', 'tizi') or BIG_UI or MID_UI
 
 
 gui_app = GuiApplication()
