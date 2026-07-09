@@ -68,7 +68,7 @@ export USE_WEBCAM=1
 **环境变量配置**:
 ```bash
 export USE_WEBCAM=1
-export FINGERPRINT="MOCK"  # 使用模拟车型
+export FINGERPRINT="VOLKSWAGEN_GOLF_MK7"  # 速腾用代理指纹(MQB平台)
 export PASSIVE=0           # 非被动模式
 ./start_openpilot.sh
 ```

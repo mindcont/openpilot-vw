@@ -31,27 +31,24 @@
 
 | 文档 | 状态 | 说明 |
 |------|------|------|
-| [视频流说明.md](视频流说明.md) | 📖 | 摄像头数据流、YUV、VisionIPC |
-| [视频流加载机制分析.md](视频流加载机制分析.md) | 📖 | 设备映射、图像格式转换 |
+| [视频流说明.md](视频流说明.md) | 📖 | 视频规格、YUV、模型对传感器的依赖 |
+| [视频流加载机制分析.md](视频流加载机制分析.md) | 📖 | camerad/VisionIPC 代码级机制、设备映射 |
 | [openpilot_摄像头启动配置指南.md](openpilot_摄像头启动配置指南.md) | 📖 | PC/webcam 摄像头启动条件 |
-| [EXTERNAL_VIDEO_GUIDE.md](EXTERNAL_VIDEO_GUIDE.md) | 📖 | 外部视频注入 |
-| [VIDEO_REPLAY_SOLUTIONS.md](VIDEO_REPLAY_SOLUTIONS.md) | 📖 | 视频回放方案 |
+| [VIDEO_REPLAY_SOLUTIONS.md](VIDEO_REPLAY_SOLUTIONS.md) | 📖 | 视频回放与外部注入方案（含原 EXTERNAL_VIDEO_GUIDE）|
 
 ## 三、数据流 / 日志 / 记录
 
 | 文档 | 状态 | 说明 |
 |------|------|------|
 | [openpilot_数据流及格式.md](openpilot_数据流及格式.md) | 📖 | 消息队列、数据格式、IPC |
-| [openpilot_complete_data_recording.md](openpilot_complete_data_recording.md) | 📖 | 数据记录流程 |
-| [openpilot_log_structure.md](openpilot_log_structure.md) | 📖 | 日志文件格式 |
-| [openpilot_日志系统详解.md](openpilot_日志系统详解.md) | 📖 | 日志存储/查看/排错 |
-| [日志层次说明.md](日志层次说明.md) | 📖 | 日志层次 |
+| [openpilot_complete_data_recording.md](openpilot_complete_data_recording.md) | 📖 | 数据记录流程/完整数据字典 |
+| [openpilot_日志系统.md](openpilot_日志系统.md) | 📖 | 日志三层次+数据结构+存储运维（合并自 3 篇）|
 
 ## 四、AI 模型 / 仿真
 
 | 文档 | 状态 | 说明 |
 |------|------|------|
-| [AI_MODELS_ANALYSIS.md](AI_MODELS_ANALYSIS.md) | 📖 | 驾驶模型架构、TinyGrad |
+| [AI_MODELS_ANALYSIS.md](AI_MODELS_ANALYSIS.md) | 📖 | 驾驶模型架构（vision+policy）、TinyGrad |
 | [MetaDrive_仿真接口文档.md](MetaDrive_仿真接口文档.md) | 📖 | MetaDrive 仿真集成 |
 
 ## 五、工具 / 进程 / 通信
@@ -67,8 +64,7 @@
 
 | 文档 | 状态 | 说明 |
 |------|------|------|
-| [安装及编译.md](安装及编译.md) | 📖 | Ubuntu 24.04 环境、编译 |
-| [容器发布.md](容器发布.md) | 📖 | Docker 发布（含 ARM64/Jetson）|
+| [环境搭建与容器部署.md](环境搭建与容器部署.md) | 📖 | 开发机环境/编译/ARM64 容器/JetPack/systemd（合并自 2 篇）|
 | [硬件改造.md](硬件改造.md) | 📖 | 硬件改造记录 |
 
 ---
