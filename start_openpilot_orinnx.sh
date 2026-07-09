@@ -73,7 +73,7 @@ export FORCE_ONROAD=1      # 无 panda 平台强制进入 onroad
 export PASSIVE=1           # 被动模式，仅观察不输出控制
 export NOBOARD=1           # 无 panda 硬件
 export SKIP_FW_QUERY=1     # 跳过车辆固件查询
-export FINGERPRINT="VOLKSWAGEN_GOLF_MK7"  # 代理指纹（MQB 平台）
+export FINGERPRINT="VOLKSWAGEN_SAGITAR_MK7"  # 速腾正式车型指纹（MQB 平台，轴距2.731）
 export BIG=1               # 大屏 UI 布局（MainLayout + AugmentedRoadView）
 
 # ★ 注意：切勿设置 IsDriverViewEnabled=True ★

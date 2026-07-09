@@ -140,7 +140,7 @@ setup_environment() {
     # 基础环境变量
     export USE_WEBCAM=1
     #export PC=0
-    export FINGERPRINT="VOLKSWAGEN_GOLF_MK7"  # 使用模拟车型
+    export FINGERPRINT="VOLKSWAGEN_SAGITAR_MK7"  # 速腾正式车型指纹（MQB 平台）
     export PASSIVE=1           # 被动模式
     export OPENPILOT_DATA=/tmp/data
     export LOGPRINT=info

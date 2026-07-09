@@ -26,7 +26,7 @@ import signal
 # 设置必要的环境变量（必须在导入 openpilot 模块之前）
 os.environ['USE_WEBCAM'] = '1'
 os.environ['PASSIVE'] = '1'
-os.environ['FINGERPRINT'] = 'VOLKSWAGEN_GOLF_MK7'
+os.environ['FINGERPRINT'] = 'VOLKSWAGEN_SAGITAR_MK7'
 os.environ['NOBOARD'] = '1'
 os.environ['BIG'] = '1'  # 使用大屏幕布局（MainLayout + AugmentedRoadView）
 os.environ.setdefault('SCALE', '0.5')  # 缩小窗口尺寸，降低 X11 转发压力

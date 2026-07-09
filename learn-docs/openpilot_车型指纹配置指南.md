@@ -10,7 +10,7 @@ openpilot 使用 `FINGERPRINT` 环境变量来强制指定车型配置，绕过�
 
 1. **自动识别优先级**：
    - CAN 消息指纹识别
-   - 固件版本匹配  
+   - 固件版本匹配
    - VIN 码解析
    - **FINGERPRINT 环境变量（最高优先级）**
 
@@ -98,10 +98,10 @@ export FINGERPRINT="VOLKSWAGEN_GOLF_MK7"
 # 在 start_openpilot.sh 中修改
 setup_environment() {
     # 其他环境变量...
-    
+
     # 车型指纹设置
     export FINGERPRINT="VOLKSWAGEN_GOLF_MK7"  # 替换为你的车型
-    
+
     # 其他配置...
 }
 ```
@@ -215,3 +215,54 @@ for car in CAR: print(car.name)
 - [安装及编译.md](安装及编译.md) - 环境搭建
 - [openpilot_进程启动指南.md](openpilot_进程启动指南.md) - 启动配置
 - [openpilot_数据流及格式.md](openpilot_数据流及格式.md) - 数据流分析
+
+
+---
+
+## 新增速腾正式车型指纹 VOLKSWAGEN_SAGITAR_MK7
+
+早期用**代理指纹** `VOLKSWAGEN_GOLF_MK7`（借同平台参数）。现已在 opendbc 中为速腾
+新增**正式车型定义**，参数更准确（轴距 2.731m vs Golf 2.62m）。
+
+### 改动清单（均在 `opendbc_repo` 子模块）
+
+| 文件 | 改动 |
+|------|------|
+| `opendbc/car/volkswagen/values.py` | 新增 `WMI.FAW_VOLKSWAGEN = "LFV"`（一汽大众）；新增 `CAR.VOLKSWAGEN_SAGITAR_MK7`（`VolkswagenMQBPlatformConfig`，mass=1400，wheelbase=2.731，MQB 平台→DBC 自动 `vw_mqb`） |
+| `opendbc/car/volkswagen/fingerprints.py` | 新增 `VOLKSWAGEN_SAGITAR_MK7` 的 `FW_VERSIONS` 占位结构 |
+| `opendbc/car/torque_data/substitute.toml` | `VOLKSWAGEN_SAGITAR_MK7 → VOLKSWAGEN_GOLF_MK7`（横向扭矩参数映射，否则 `get_std_params` 报 KeyError） |
+
+### 启动链路
+
+```
+FINGERPRINT=VOLKSWAGEN_SAGITAR_MK7 (环境变量强制指定)
+  → CarInterface.get_params(CAR.VOLKSWAGEN_SAGITAR_MK7)
+  → CarParams: brand=volkswagen, DBC=vw_mqb, wheelbase=2.731, steerRatio=15.6,
+               safetyModel=volkswagen
+  → CarState/CarController 按 MQB 分支解析 CAN
+```
+
+启动脚本已统一切换为该指纹：`start_openpilot.sh`、`start_openpilot_orinnx.sh`、
+`run_laneline_demo.py`。
+
+### 两种指纹方式
+
+| 方式 | 触发 | 是否需 VIN/FW |
+|------|------|--------------|
+| **环境变量强制指定**（当前用）| `FINGERPRINT=VOLKSWAGEN_SAGITAR_MK7` | 否，直接用车型定义 |
+| VIN/FW 自动识别 | 无 FINGERPRINT，靠 VIN 的 WMI+chassis_code + fwdRadar FW | 是 |
+
+### 实车填充 TODO（仅自动识别需要，强制指定不受影响）
+
+1. **chassis_codes**：读实车 VIN 第 7-8 位填入 `values.py`（当前 `set()` 空）
+2. **FW_VERSIONS**：实车联机查询固件后填入 `fingerprints.py`：
+   ```bash
+   cd opendbc_repo && python3 -m opendbc.car.debug.get_fw_versions
+   # 再用 opendbc/car/debug/format_fingerprints.py 规范化
+   ```
+
+### 子模块改动注意
+
+- `opendbc_repo` 的 origin 是上游 `commaai/opendbc`，本地 commit **不会** push 到上游。
+- 主 repo 记录子模块指针指向本地 commit。
+- ⚠️ 执行 `git submodule update --remote` 会覆盖这些本地改动，需重新应用或从本地 commit 恢复。
