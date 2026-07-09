@@ -85,13 +85,54 @@ CAN 拿不到有效前车距离（ACC 未编码，见《大众速腾CAN抓包解
 4. **网络位置 networkLocation**：需确认相机网络位置（fwdCamera / gateway），
    影响 `ext_cp` 从哪条总线取 ACC 报文；本项目不控车、不读 ACC，影响有限。
 
-## 八、复核方法
+## 八、延伸:完整 openpilot(控车)可行性
 
-依赖核对脚本：`tools/vw/can_analysis/check_carstate_deps.py`
+> 本项目定位是**不控车纯视觉预测**。此节仅评估「若将来要跑完整 openpilot(横向+纵向
+> 控车)」的前提,供参考。控车是完全不同的安全等级,涉及法规与安全责任。
+
+### 横向控制(转向)—— 实测硬件前提基本具备
+
+`check_lateral_deps.py` 对抓包核查(基于 opendbc MQB `carcontroller.py`/`interface.py`):
+
+| 判据 | 结果 | 含义 |
+|------|------|------|
+| `HCA_01` (0x126) | ✓ bus0/bus2 | 有原厂车道保持相机(R242),转向报文在总线广播 |
+| `LDW_02` (919) | ✓ bus0/bus2 | 有原厂车道偏离警告 |
+| `LH_EPS_03.EPS_HCA_Status` | `initializing`(非 DISABLED) | EPS 支持 HCA 转向注入,不拒绝 |
+| networkLocation | gateway | bus0 命中 Airbag_01/LWI_01/ESP_19/ESP_21 |
+
+**结论**:该中配速腾**物理具备原厂车道保持(Lane Assist)硬件**,EPS 也配置了接受
+转向注入的能力。这修正了早前"中配可能无 Lane Assist"的猜测。
+`interface.py` 会因 `0x126 in fingerprint[2]` 置 `STOCK_HCA_PRESENT`,openpilot 可拦截
+并替换相机 HCA 报文实现转向。
+
+### 纵向控制 —— 需开通 ACC
+
+- 开通(编码激活)前雷达 ACC 后,`pcmCruise` 模式借用**原厂 ACC** 做纵向跟车
+  (VW `radarUnavailable=True`,openpilot 不直接用雷达点,由原厂 ACC 处理)。
+- openpilot 自控纵向(`openpilotLongitudinalControl`)是实验性:需 Panda ALLOW_DEBUG
+  固件、无雷达点(靠视觉 E2E),不推荐。
+
+### 剩余的真正门槛(硬件为主)
+
+| 条件 | 状态 | 说明 |
+|------|------|------|
+| 横向硬件(HCA/EPS)| ✅ 基本具备 | 实测 HCA_01 + EPS 支持 |
+| 开通 ACC(纵向)| 待编码 | 编码激活前雷达 |
+| **可写 panda + 相机中间人 harness** | ❌ **主要门槛** | 当前旁路只读,控车需接在 R242 相机与车之间并能写 CAN |
+| 去 PASSIVE/NOBOARD、在线标定、驾驶员监控 | 待配置 | 软件层面 |
+
+### 待坐实的不确定性
+
+1. `EPS_HCA_Status` 静止为 `initializing`,需**行驶中验证能到 `READY`/`ACTIVE`**。
+2. 最终以**车辆配置单 / EPS 编码**为准,静止抓包为强提示但非编码级确认。
+
+## 九、复核方法
 
 ```bash
 cd /home/wio/openpilot && source .venv/bin/activate
+# carState 依赖消息核对(纵向/预测所需)
 python3 tools/vw/can_analysis/check_carstate_deps.py <csv> <dbc>
+# 横向控制前提核查(HCA/EPS/网络位置)
+python3 tools/vw/can_analysis/check_lateral_deps.py <csv> <dbc>
 ```
-
-输出每个 carstate 依赖消息在三条总线上的存在情况，确认 carState 可完整产出。

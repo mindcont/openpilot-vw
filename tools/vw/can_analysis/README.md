@@ -27,6 +27,7 @@ cabana 导出格式，表头：`time,addr,bus,data`
 | `full_scan.py` | 全量三总线覆盖统计 + 关键信号评估 | `full_scan.py <csv> <dbc>` |
 | `acc_radar.py` | ACC 前车雷达距离信号专项评估 | `acc_radar.py <csv> <dbc>` |
 | `check_carstate_deps.py` | 核对 carstate.py 依赖消息是否齐全 | `check_carstate_deps.py <csv> <dbc>` |
+| `check_lateral_deps.py` | 核查横向控制前提(HCA/EPS/网络位置) | `check_lateral_deps.py <csv> <dbc>` |
 
 ## 示例
 
