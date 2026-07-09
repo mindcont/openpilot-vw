@@ -21,6 +21,11 @@ inclusion: always
 | 活跃分支 | `dev-vw`（默认） |
 | 子模块 | panda、opendbc_repo、msgq_repo、rednose_repo、teleoprtc_repo、tinygrad_repo |
 
+> **opendbc 子模块已 fork 化**：含速腾车型定义，指向 `mindcont/opendbc` 的 `dev-vw` 分支
+> （`.gitmodules` url = `../../mindcont/opendbc.git`）。子模块内 `origin` 仍指官方（便于
+> 同步上游），push 用 `mine` remote。⚠️ 日常用 `git submodule update --init`，**勿用
+> `--remote`**（会拉上游覆盖速腾定义/tinygrad 锁定版本）。
+
 ## 两种运行方式
 
 1. **PC 纯视觉验证（已跑通）**：`python3 run_laneline_demo.py`
@@ -29,7 +34,7 @@ inclusion: always
 2. **Orin NX 生产部署（脚本就绪，未实机验证）**：`./start_openpilot_orinnx.sh`
    - 走正规 manager 流程，双摄像头（road + wide），真实 CAN
 
-关键环境变量：`USE_WEBCAM=1`、`FINGERPRINT=VOLKSWAGEN_GOLF_MK7`（代理指纹）、
+关键环境变量：`USE_WEBCAM=1`、`FINGERPRINT=VOLKSWAGEN_SAGITAR_MK7`（速腾正式指纹）、
 `PASSIVE=1`、`NOBOARD=1`、`FORCE_ONROAD=1`、`BIG=1`（大屏 UI）。
 ⚠️ **切勿设 `IsDriverViewEnabled=True`**——会触发 `not_driver_view=False` 阻塞 onroad 启动。
 
@@ -41,6 +46,15 @@ demo.mp4 → webcamerad → VisionIPC → modeld → modelV2 → UI 叠加，`la
 
 ### 目标平台是 Jetson Orin NX（非 TX2）
 无 `/TICI` → openpilot 视角 `PC=True`，所有 `if PC:` 适配自动生效。算力足够跑满 20fps。
+
+### 速腾正式车型指纹 VOLKSWAGEN_SAGITAR_MK7（已建，替代代理指纹）
+在 opendbc 子模块中新增了正式车型定义（不再借 GOLF_MK7 代理），参数更准（轴距 2.731）：
+- `values.py`：`WMI.FAW_VOLKSWAGEN="LFV"`（一汽大众）+ `CAR.VOLKSWAGEN_SAGITAR_MK7`
+  （`VolkswagenMQBPlatformConfig`，mass=1400，wheelbase=2.731，MQB→DBC `vw_mqb`）
+- `fingerprints.py`：FW_VERSIONS 占位；`torque_data/substitute.toml`：SAGITAR→GOLF_MK7 扭矩映射
+- 启动脚本 FINGERPRINT 已全部切到 `VOLKSWAGEN_SAGITAR_MK7`
+- ⚠️ `chassis_codes`/`FW_VERSIONS` 仍为占位，**VIN/FW 自动识别需实车填充**；当前靠
+  `FINGERPRINT` 环境变量强制指定，已可用（不走 VIN/FW 匹配）
 
 ### CAN 抓包解析（J533 静止点火，vw_mqb.dbc）
 - **DBC 用 `vw_mqb.dbc`**（匹配度最高 68%），不是 vw_mqb_20.dbc
