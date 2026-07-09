@@ -26,6 +26,7 @@ cabana 导出格式，表头：`time,addr,bus,data`
 | `decode_can.py` | 解析核心车辆信号（车速/方向盘/档位等）| `decode_can.py <csv> <dbc> [bus]` |
 | `full_scan.py` | 全量三总线覆盖统计 + 关键信号评估 | `full_scan.py <csv> <dbc>` |
 | `acc_radar.py` | ACC 前车雷达距离信号专项评估 | `acc_radar.py <csv> <dbc>` |
+| `check_carstate_deps.py` | 核对 carstate.py 依赖消息是否齐全 | `check_carstate_deps.py <csv> <dbc>` |
 
 ## 示例
 
