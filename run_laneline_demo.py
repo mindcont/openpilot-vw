@@ -28,8 +28,13 @@ os.environ['USE_WEBCAM'] = '1'
 os.environ['PASSIVE'] = '1'
 os.environ['FINGERPRINT'] = 'VOLKSWAGEN_SAGITAR_MK7'
 os.environ['NOBOARD'] = '1'
-os.environ['BIG'] = '1'  # 使用大屏幕布局（MainLayout + AugmentedRoadView）
-os.environ.setdefault('SCALE', '0.5')  # 缩小窗口尺寸，降低 X11 转发压力
+# 显示布局：MID_UI(七寸屏1024×600)优先；否则默认大屏 BIG=1
+if os.environ.get('MID_UI') == '1':
+    # MID_UI 自带等比缩放,不强设 BIG/SCALE(否则覆盖 MID_UI 的缩放逻辑)
+    pass
+else:
+    os.environ['BIG'] = '1'                  # 大屏布局（MainLayout + AugmentedRoadView）
+    os.environ.setdefault('SCALE', '0.5')    # 缩小窗口,降低 X11 转发压力
 
 # 视频文件路径
 DEMO_VIDEO = os.environ.get('WEBCAM_VIDEO',

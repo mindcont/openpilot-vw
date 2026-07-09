@@ -6,12 +6,9 @@ CAN 调试叠加面板：在 onroad 画面左上角叠加显示 CAN 总线关键
 读取的是 CarState（由 vw_mqb.dbc 解析的车辆信号）。
 """
 import pyray as rl
-from cereal import log
 from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.system.ui.lib.application import gui_app, FontWeight
 from openpilot.system.ui.widgets import Widget
-
-GearShifter = log.CarState.GearShifter
 
 # 面板样式（逻辑坐标系，2160×1080；MID_UI 会等比缩放）
 PANEL_X = 40
@@ -52,19 +49,19 @@ class CanDebugOverlay(Widget):
     cc = sm["carControl"]
     rows = []
 
-    # --- 车辆信号(CarState,来自 CAN 解析)---
-    rows.append(("车速 vEgo", f"{cs.vEgo * 3.6:5.1f} km/h", VALUE))
-    rows.append(("仪表车速", f"{cs.vEgoCluster * 3.6:5.1f} km/h", VALUE))
-    rows.append(("方向盘角度", f"{cs.steeringAngleDeg:6.1f} deg", VALUE))
-    rows.append(("方向盘力矩", f"{cs.steeringTorque:5.1f}", VALUE))
-    rows.append(("档位", self._gear_name(cs.gearShifter), VALUE))
-    rows.append(("油门/刹车", f"{cs.gas:.2f} / {cs.brake:.2f}", VALUE))
-    rows.append(("踏板 gas/brk", f"{int(cs.gasPressed)} / {int(cs.brakePressed)}", VALUE))
-    rows.append(("静止 standstill", "YES" if cs.standstill else "no", VALUE))
-    rows.append(("转向灯 L/R", f"{int(cs.leftBlinker)} / {int(cs.rightBlinker)}", VALUE))
-    rows.append(("巡航 en/spd",
+    # --- 车辆信号(CarState,来自 CAN 解析)。标签用英文避免字体缺 CJK 字形乱码 ---
+    rows.append(("Speed vEgo", f"{cs.vEgo * 3.6:5.1f} km/h", VALUE))
+    rows.append(("Cluster Spd", f"{cs.vEgoCluster * 3.6:5.1f} km/h", VALUE))
+    rows.append(("Steer Angle", f"{cs.steeringAngleDeg:6.1f} deg", VALUE))
+    rows.append(("Steer Torque", f"{cs.steeringTorque:5.1f}", VALUE))
+    rows.append(("Gear", self._gear_name(cs.gearShifter), VALUE))
+    rows.append(("Brake", f"{cs.brake:.2f}", VALUE))
+    rows.append(("Pedal gas/brk", f"{int(cs.gasPressed)} / {int(cs.brakePressed)}", VALUE))
+    rows.append(("Standstill", "YES" if cs.standstill else "no", VALUE))
+    rows.append(("Blinker L/R", f"{int(cs.leftBlinker)} / {int(cs.rightBlinker)}", VALUE))
+    rows.append(("Cruise en/spd",
                  f"{int(cs.cruiseState.enabled)} / {cs.cruiseState.speed * 3.6:.0f}", VALUE))
-    rows.append(("转向可用/退避",
+    rows.append(("Steer OK/Press",
                  f"{int(not cs.steerFaultTemporary)} / {int(cs.steeringPressed)}", VALUE))
     rows.append(("latActive", "YES" if cc.latActive else "no", VALUE))
 
@@ -104,7 +101,7 @@ class CanDebugOverlay(Widget):
     ty += ROW_H // 2
 
     # 消息健康
-    rl.draw_text_ex(self._font_bold, "消息 alive / valid", rl.Vector2(tx, ty), FONT_SIZE, 0, TITLE)
+    rl.draw_text_ex(self._font_bold, "Msg alive / valid", rl.Vector2(tx, ty), FONT_SIZE, 0, TITLE)
     ty += ROW_H
     for msg in HEALTH_MSGS:
       alive = bool(sm.alive.get(msg, False)) if hasattr(sm, "alive") else False
