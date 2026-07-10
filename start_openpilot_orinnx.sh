@@ -163,6 +163,63 @@ echo "  FORCE_ONROAD=1  PASSIVE=1  NOBOARD=1  OpenpilotEnabledToggle=False(只�
 echo "  显示: MID_UI=${MID_UI:-0} (${MID_UI_SIZE:-})  BIG=${BIG:-0}  CAN_DEBUG=${CAN_DEBUG:-0}"
 echo "=================================================="
 
+# ============================================================
+# Bug 2 修复：后台注入 CarParams，解除 modeld 永久阻塞
+# ------------------------------------------------------------
+# 根因（见 learn-docs/环境搭建与容器部署.md 第十三节 Bug 2）：
+#   NOBOARD=1 无真实 CAN 时，card.py 的 Car.__init__ 永久阻塞在
+#   recv_one_retry(can_sock) 等第一条 CAN，从不写 CarParams；而 modeld 的
+#   params.get("CarParams", block=True) 一直等 card 写入 -> modeld 永远卡死、
+#   modelV2=0。这里由外部把 CarParams 写好，modeld 读到即解阻塞进入推理循环。
+#
+# 时序关键（见第十五节）：CarParams 的参数标志是
+#   CLEAR_ON_MANAGER_START | CLEAR_ON_ONROAD_TRANSITION，
+#   manager 启动时(manager.py:46-47)和进 onroad 时(manager.py:199)各清一次，
+#   且 IsOnroad=True 在同轮清除之后才置位。因此必须等 IsOnroad=True 再注入，
+#   pre-manager 预写一定会被清掉（已验证）。
+#
+# 安全性：card 无 CAN 会一直阻塞，永远不置 ControlsReady=True；pandad 的
+#   setSafetyMode() 依赖 ControlsReady 才执行，故 panda 一直停在上电默认只读态
+#   （SILENT/NO_OUTPUT）。本注入天然只读，无需修改 card.py。若真车 CAN 接入，
+#   card 会正常识别并覆盖本注入（注入器仅在 CarParams 缺失时写），行为安全。
+#
+# 参数：notCar=True 是已验证可行的最简方式（与 run_laneline_demo.py 一致），
+#   wheelbase 用速腾真实值 2.731。需要更完整车辆几何时可改注入
+#   CarInterface.get_non_essential_params(CAR.VOLKSWAGEN_SAGITAR_MK7)。
+# ============================================================
+(
+  python3 - <<'PY'
+import time
+from openpilot.common.params import Params
+from cereal import car
+
+params = Params()
+cp_bytes = car.CarParams(notCar=True, wheelbase=2.731, steerRatio=15.6).to_bytes()
+
+# 1) 等 onroad（已越过 CarParams 的清除点）
+t0 = time.time()
+while not params.get_bool("IsOnroad"):
+    if time.time() - t0 > 120:
+        print("[orinnx][inject] 等待 onroad 超时(120s)，仍尝试注入", flush=True)
+        break
+    time.sleep(0.5)
+
+# 2) 注入并短时守护，防止 onroad 转换清除后 card 因无 CAN 不补写
+deadline = time.time() + 20
+done = False
+while time.time() < deadline:
+    if params.get("CarParams") is None:
+        params.put("CarParams", cp_bytes)
+        if not done:
+            print("[orinnx][inject] 已注入 CarParams(notCar=True, wheelbase=2.731) 解除 modeld 阻塞", flush=True)
+            done = True
+    time.sleep(1)
+print("[orinnx][inject] CarParams 注入器退出" + ("（已注入）" if done else "（CarParams 已由 card 写入，未注入）"), flush=True)
+PY
+) &
+echo "  [inject] CarParams 后台注入器已启动，等待 onroad 后注入以解除 modeld 阻塞"
+echo "=================================================="
+
 # 走正规 manager 流程：manager 会根据条件自动拉起
 # webcamerad → modeld → ui 等进程
 exec ./launch_openpilot.sh
