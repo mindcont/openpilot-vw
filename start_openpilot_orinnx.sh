@@ -139,6 +139,15 @@ p = Params()
 p.put("HasAcceptedTerms", terms_version)
 p.put("CompletedTrainingVersion", training_version)
 print(f"[orinnx] onboarding 已跳过: terms={terms_version} training={training_version}")
+
+# 只读防线（第一道软件闸门）：强制关闭 openpilot 控车总开关。
+# 见 learn-docs/环境搭建与容器部署.md 第十五节。
+# card.py 会用该 Param 重算 passive：OpenpilotEnabledToggle=False ->
+# controller_available=False -> CP.passive=True -> safetyConfigs=[noOutput]，
+# openpilot 不生成控制 CAN，pandad 把 panda 设为 noOutput（固件层拒绝 TX）。
+# 注意：PASSIVE 环境变量没有任何代码读取，不起保护作用，真正的杠杆是这个 Param。
+p.put_bool("OpenpilotEnabledToggle", False)
+print("[orinnx] 只读防线: OpenpilotEnabledToggle=False (passive 将被 card 锁定为 True)")
 PY
 
 echo "=================================================="
@@ -150,7 +159,7 @@ if [ "$SINGLE_CAM" = "1" ]; then
 else
   echo "  wide cam : /dev/video${WIDE_CAM}  ${WIDE_CAM_SIZE}  K=${WIDE_CAM_INTRINSICS}  exposure=${WIDE_CAM_EXPOSURE}"
 fi
-echo "  FORCE_ONROAD=1  PASSIVE=1  NOBOARD=1"
+echo "  FORCE_ONROAD=1  PASSIVE=1  NOBOARD=1  OpenpilotEnabledToggle=False(只读锁)"
 echo "  显示: MID_UI=${MID_UI:-0} (${MID_UI_SIZE:-})  BIG=${BIG:-0}  CAN_DEBUG=${CAN_DEBUG:-0}"
 echo "=================================================="
 

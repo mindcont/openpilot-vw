@@ -164,6 +164,17 @@ setup_environment() {
     export OPENBLAS_NUM_THREADS=1
     export VECLIB_MAXIMUM_THREADS=1
 
+    # 只读防线（第一道软件闸门）：强制关闭 openpilot 控车总开关。
+    # 见 learn-docs/环境搭建与容器部署.md 第十五节。
+    # 本脚本 NOBOARD=0，pandad 一定运行、可能连到真实 panda，只读锁尤其重要。
+    # card.py 用该 Param 重算 passive：OpenpilotEnabledToggle=False ->
+    # controller_available=False -> CP.passive=True -> safetyConfigs=[noOutput]，
+    # openpilot 不生成控制 CAN，pandad 把 panda 设为 noOutput（固件层拒绝 TX）。
+    # 注意：PASSIVE 环境变量没有任何代码读取，不起保护作用，真正的杠杆是这个 Param。
+    python3 -c "from openpilot.common.params import Params; Params().put_bool('OpenpilotEnabledToggle', False)" \
+      && log_success "只读防线: OpenpilotEnabledToggle=False (passive 将被 card 锁定为 True)" \
+      || log_warning "只读防线: 设置 OpenpilotEnabledToggle 失败，请手动核实"
+
     log_success "环境变量设置完成"
     log_info "摄像头配置: USE_WEBCAM=1 (将启动webcamerad进程)"
 }
