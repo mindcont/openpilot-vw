@@ -44,8 +44,10 @@ export SINGLE_CAM=${SINGLE_CAM:-0}
 # 摄像头配置（★ 需按实机调整 ★）
 # ============================================================
 # 设备号：用 `v4l2-ctl --list-devices` 查询后填写
+# 实测（2026-07-10 hal9000）：两个 USB 摄像头分别挂在 video0/1 与 video2/3，
+# 各自的采集节点是 video0（road）与 video2（wide）。
 export ROAD_CAM=0          # 前视窄视野摄像头 -> /dev/video0
-export WIDE_CAM=1          # 前视宽视野摄像头 -> /dev/video1
+export WIDE_CAM=2          # 前视宽视野摄像头 -> /dev/video2
 
 # 采集分辨率（宽x高），必须与下方 *_INTRINSICS 的分辨率一致
 export ROAD_CAM_SIZE=1928x1208
@@ -63,6 +65,38 @@ export CAM_FLIP=0
 # 单摄模式：置空 WIDE_CAM 以禁用宽角摄像头（camerad.py 的 `if WIDE_CAM:` 判空）
 if [ "$SINGLE_CAM" = "1" ]; then
   export WIDE_CAM=""
+fi
+
+# ============================================================
+# 曝光手动设置（★ 强光/室外场景必做 ★）
+# ------------------------------------------------------------
+# 两个摄像头默认 auto_exposure=3（光圈优先自动模式），在停车场顶棚等
+# 强反光场景下会严重过曝（画面发白，车道线/车牌都看不清）。
+# 实测（2026-07-10 hal9000，阴天顶棚停车场）：
+#   road (video0)：exposure_time_absolute=8   （单位 1/10000 秒，即 0.8ms）
+#   wide (video2)：exposure_time_absolute=40  （即 4ms）
+# road 对着更亮的天空区域，需要比 wide 更低的曝光值。
+# 这两个值是凭观感调的，不是精确标定；实际效果应结合 modeld 的
+# laneLineProbs 置信度反馈微调，且白天/夜晚场景可能需要不同的值。
+# 该设置不持久化（重启/摄像头断连后恢复默认），所以每次启动都重新应用。
+export ROAD_CAM_EXPOSURE=${ROAD_CAM_EXPOSURE:-8}
+export WIDE_CAM_EXPOSURE=${WIDE_CAM_EXPOSURE:-40}
+
+function set_camera_exposure() {
+  local dev="/dev/video$1"
+  local exposure="$2"
+  if [ -e "$dev" ] && command -v v4l2-ctl > /dev/null 2>&1; then
+    v4l2-ctl -d "$dev" --set-ctrl=auto_exposure=1 2>/dev/null
+    v4l2-ctl -d "$dev" --set-ctrl=exposure_time_absolute="$exposure" 2>/dev/null
+    echo "  已设置 $dev 曝光: manual, exposure_time_absolute=$exposure"
+  else
+    echo "  [警告] $dev 不存在或 v4l2-ctl 未安装，跳过曝光设置"
+  fi
+}
+
+set_camera_exposure "$ROAD_CAM" "$ROAD_CAM_EXPOSURE"
+if [ -n "$WIDE_CAM" ]; then
+  set_camera_exposure "$WIDE_CAM" "$WIDE_CAM_EXPOSURE"
 fi
 
 # ============================================================
@@ -110,11 +144,11 @@ PY
 echo "=================================================="
 echo "  openpilot-vw  Jetson Orin NX  车道线预测"
 echo "=================================================="
-echo "  road cam : /dev/video${ROAD_CAM}  ${ROAD_CAM_SIZE}  K=${ROAD_CAM_INTRINSICS}"
+echo "  road cam : /dev/video${ROAD_CAM}  ${ROAD_CAM_SIZE}  K=${ROAD_CAM_INTRINSICS}  exposure=${ROAD_CAM_EXPOSURE}"
 if [ "$SINGLE_CAM" = "1" ]; then
   echo "  wide cam : 已禁用（单摄验证模式 SINGLE_CAM=1）"
 else
-  echo "  wide cam : /dev/video${WIDE_CAM}  ${WIDE_CAM_SIZE}  K=${WIDE_CAM_INTRINSICS}"
+  echo "  wide cam : /dev/video${WIDE_CAM}  ${WIDE_CAM_SIZE}  K=${WIDE_CAM_INTRINSICS}  exposure=${WIDE_CAM_EXPOSURE}"
 fi
 echo "  FORCE_ONROAD=1  PASSIVE=1  NOBOARD=1"
 echo "  显示: MID_UI=${MID_UI:-0} (${MID_UI_SIZE:-})  BIG=${BIG:-0}  CAN_DEBUG=${CAN_DEBUG:-0}"
