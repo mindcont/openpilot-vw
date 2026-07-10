@@ -68,35 +68,40 @@ if [ "$SINGLE_CAM" = "1" ]; then
 fi
 
 # ============================================================
-# 曝光手动设置（★ 强光/室外场景必做 ★）
+# 曝光/增益手动设置（★ 按现场光照调整 ★）
 # ------------------------------------------------------------
-# 两个摄像头默认 auto_exposure=3（光圈优先自动模式），在停车场顶棚等
-# 强反光场景下会严重过曝（画面发白，车道线/车牌都看不清）。
-# 实测（2026-07-10 hal9000，阴天顶棚停车场）：
-#   road (video0)：exposure_time_absolute=8   （单位 1/10000 秒，即 0.8ms）
-#   wide (video2)：exposure_time_absolute=40  （即 4ms）
-# road 对着更亮的天空区域，需要比 wide 更低的曝光值。
-# 这两个值是凭观感调的，不是精确标定；实际效果应结合 modeld 的
-# laneLineProbs 置信度反馈微调，且白天/夜晚场景可能需要不同的值。
-# 该设置不持久化（重启/摄像头断连后恢复默认），所以每次启动都重新应用。
-export ROAD_CAM_EXPOSURE=${ROAD_CAM_EXPOSURE:-8}
-export WIDE_CAM_EXPOSURE=${WIDE_CAM_EXPOSURE:-40}
+# 两个摄像头默认 auto_exposure=3（自动），但自动模式在很多场景下发白或发暗，
+# 故统一改手动 auto_exposure=1，用 exposure_time_absolute + gain 控制亮度。
+# 单位：exposure_time_absolute 为 1/10000 秒；范围实测 1..10000，gain 0..128。
+# 注意：exposure 超过帧周期会拖低帧率（20fps 帧周期=50ms=500），建议 <=450 保 20fps，
+#       不够亮再靠 gain（最大 128）补。
+# 实测调参记录（hal9000）：
+#   - 2026-07-10 阴天顶棚停车场(强反光)：road exposure=8, wide exposure=40（防过曝）
+#   - 室内常光：road exposure=300 gain=128（默认值，画面明亮）
+# 这些是凭观感调的、非精确标定；不同光照/白天夜晚需重调，最终应结合 modeld 的
+# laneLineProbs 反馈微调。该设置不持久化（重启/断连恢复默认），故每次启动都重设。
+export ROAD_CAM_EXPOSURE=${ROAD_CAM_EXPOSURE:-300}
+export WIDE_CAM_EXPOSURE=${WIDE_CAM_EXPOSURE:-300}
+export ROAD_CAM_GAIN=${ROAD_CAM_GAIN:-128}
+export WIDE_CAM_GAIN=${WIDE_CAM_GAIN:-128}
 
 function set_camera_exposure() {
   local dev="/dev/video$1"
   local exposure="$2"
+  local gain="$3"
   if [ -e "$dev" ] && command -v v4l2-ctl > /dev/null 2>&1; then
     v4l2-ctl -d "$dev" --set-ctrl=auto_exposure=1 2>/dev/null
     v4l2-ctl -d "$dev" --set-ctrl=exposure_time_absolute="$exposure" 2>/dev/null
-    echo "  已设置 $dev 曝光: manual, exposure_time_absolute=$exposure"
+    [ -n "$gain" ] && v4l2-ctl -d "$dev" --set-ctrl=gain="$gain" 2>/dev/null
+    echo "  已设置 $dev 曝光: manual, exposure_time_absolute=$exposure, gain=${gain:-默认}"
   else
     echo "  [警告] $dev 不存在或 v4l2-ctl 未安装，跳过曝光设置"
   fi
 }
 
-set_camera_exposure "$ROAD_CAM" "$ROAD_CAM_EXPOSURE"
+set_camera_exposure "$ROAD_CAM" "$ROAD_CAM_EXPOSURE" "$ROAD_CAM_GAIN"
 if [ -n "$WIDE_CAM" ]; then
-  set_camera_exposure "$WIDE_CAM" "$WIDE_CAM_EXPOSURE"
+  set_camera_exposure "$WIDE_CAM" "$WIDE_CAM_EXPOSURE" "$WIDE_CAM_GAIN"
 fi
 
 # ============================================================
@@ -108,9 +113,11 @@ export PASSIVE=1           # 被动模式，仅观察不输出控制
 export NOBOARD=1           # 无 panda 硬件
 export SKIP_FW_QUERY=1     # 跳过车辆固件查询
 export FINGERPRINT="VOLKSWAGEN_SAGITAR_MK7"  # 速腾正式车型指纹（MQB 平台，轴距2.731）
-# 显示配置（7 寸屏 1024×600 用 MID_UI；comma 大屏/桌面全屏用 BIG）
-export MID_UI=1                 # 7寸屏 1024×600：等比缩放大屏布局(MainLayout)，不变形
-export MID_UI_SIZE=1024x600     # 目标物理分辨率，其他尺寸屏可改
+# 显示配置（按物理屏分辨率用 MID_UI 等比缩放大屏布局；comma 大屏/桌面全屏用 BIG）
+export MID_UI=1                 # 复用大屏布局(MainLayout)等比缩放到物理屏，不变形
+export MID_UI_SIZE=${MID_UI_SIZE:-1280x720}  # 物理屏分辨率（hal9000 DP-1=1280x720）
+#   注：MainLayout 逻辑分辨率 2160×1080(2:1)，缩放到 1280×720(16:9) 时按宽度贴满，
+#   窗口约 1280×640，底部约 80px 黑边是比例差导致的正常现象。换屏改这个值即可。
 # export BIG=1                  # 备选：2160×1080 大屏/桌面
 # export CAN_DEBUG=1            # 可选：onroad 画面叠加显示 CAN 关键变量(调试用)
 
