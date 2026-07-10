@@ -125,3 +125,16 @@ AI 推理 tinygrad；视频 VisionIPC/YUV；目标平台 PC(Ubuntu 24.04)/Jetson
 3. **`opendbc_repo` 下 `*_generated.dbc`** 是构建产物，会被 `git clean -fd` 清理。
 4. **虚拟环境** `.venv/` 已配置。
 5. **提交规范**：改动完成后按功能聚焦提交；文档/工具改动与代码改动分开提交。
+6. **本地代码为准，远端（Orin NX / hal9000）只走 git 同步，不用 scp 手动传代码/文档**：
+   - 改动统一在本地（wio 开发机）完成 → `git add` + `git commit` → `git push origin dev-vw`
+   - Orin NX (`car@100.73.154.105`，hostname `hal9000`) 上只用 `git pull origin dev-vw`
+     拉取更新，不手动 scp 覆盖代码或文档文件（避免和仓库版本冲突/不一致）
+   - 例外：**pkl 模型缓存文件**（`selfdrive/modeld/models/*.pkl`）本身不受版本控制
+     （`.gitignore`），且往往是在 Orin NX 上现场编译生成/替换验证用的，这类文件走
+     scp/直接在远端操作是正常做法，不适用本条
+   - 例外：**调试脚本可以先在远端临时用 scp 快速验证**，但验证完成后要把最终版本
+     写回本地仓库、提交、push，再让远端 `git pull` 覆盖掉之前临时传的版本，不要让
+     远端留有游离于 git 之外的脚本副本（曾出现 scp 传的临时脚本与 pull 下来的仓库版本
+     文件名冲突，需先删除本地临时文件才能 fast-forward 的情况）
+   - SSH 免密登录已配置（本机公钥已加入 Orin NX 的 `~/.ssh/authorized_keys`），
+     后续 `ssh car@100.73.154.105` / `git pull` 无需再要密码
