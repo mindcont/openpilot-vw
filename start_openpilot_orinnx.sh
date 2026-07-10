@@ -77,13 +77,14 @@ fi
 #       不够亮再靠 gain（最大 128）补。
 # 实测调参记录（hal9000）：
 #   - 2026-07-10 阴天顶棚停车场(强反光)：road exposure=8, wide exposure=40（防过曝）
-#   - 室内常光：road exposure=300 gain=128（默认值，画面明亮）
+#   - 2026-07-10 室内/车内看真实道路：road exposure=50 gain=40（默认值，画面清晰、
+#     车道线可见；exposure=300/gain=128 会严重过曝发白，已弃用）
 # 这些是凭观感调的、非精确标定；不同光照/白天夜晚需重调，最终应结合 modeld 的
 # laneLineProbs 反馈微调。该设置不持久化（重启/断连恢复默认），故每次启动都重设。
-export ROAD_CAM_EXPOSURE=${ROAD_CAM_EXPOSURE:-300}
-export WIDE_CAM_EXPOSURE=${WIDE_CAM_EXPOSURE:-300}
-export ROAD_CAM_GAIN=${ROAD_CAM_GAIN:-128}
-export WIDE_CAM_GAIN=${WIDE_CAM_GAIN:-128}
+export ROAD_CAM_EXPOSURE=${ROAD_CAM_EXPOSURE:-50}
+export WIDE_CAM_EXPOSURE=${WIDE_CAM_EXPOSURE:-50}
+export ROAD_CAM_GAIN=${ROAD_CAM_GAIN:-40}
+export WIDE_CAM_GAIN=${WIDE_CAM_GAIN:-40}
 
 function set_camera_exposure() {
   local dev="/dev/video$1"
@@ -118,6 +119,7 @@ export MID_UI=1                 # 复用大屏布局(MainLayout)等比缩放到�
 export MID_UI_SIZE=${MID_UI_SIZE:-1280x720}  # 物理屏分辨率（hal9000 DP-1=1280x720）
 #   注：MainLayout 逻辑分辨率 2160×1080(2:1)，缩放到 1280×720(16:9) 时按宽度贴满，
 #   窗口约 1280×640，底部约 80px 黑边是比例差导致的正常现象。换屏改这个值即可。
+export UI_FULLSCREEN=${UI_FULLSCREEN:-1}  # 无边框全屏：去标题栏+盖住桌面顶栏（看板式）
 # export BIG=1                  # 备选：2160×1080 大屏/桌面
 # export CAN_DEBUG=1            # 可选：onroad 画面叠加显示 CAN 关键变量(调试用)
 

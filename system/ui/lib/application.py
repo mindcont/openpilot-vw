@@ -288,6 +288,12 @@ class GuiApplication:
 
       rl.init_window(self._scaled_width, self._scaled_height, title)
 
+      # 无边框全屏（UI_FULLSCREEN=1）：去掉窗口标题栏并覆盖整个显示器（含桌面顶栏），
+      # 用于 Orin NX 等接物理屏的看板式显示。内容仍按 MID_UI/scale 缩放绘制，
+      # 屏幕宽高比与逻辑布局(2:1)不一致时以黑边补足。默认关闭，不影响其他平台。
+      if os.getenv("UI_FULLSCREEN") == "1":
+        rl.toggle_borderless_windowed()
+
       needs_render_texture = self._scale != 1.0 or BURN_IN_MODE or RECORD
       if self._scale != 1.0:
         rl.set_mouse_scale(1 / self._scale, 1 / self._scale)
