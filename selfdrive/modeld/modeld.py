@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import os
 from openpilot.system.hardware import TICI, PC
-os.environ['DEV'] = 'QCOM' if TICI else 'CPU'
+os.environ['DEV'] = os.environ.get('DEV', 'QCOM' if TICI else 'CPU')
 USBGPU = "USBGPU" in os.environ
 if USBGPU:
   os.environ['DEV'] = 'AMD'
