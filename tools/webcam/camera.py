@@ -30,8 +30,14 @@ class Camera:
       self.cap.set(cv.CAP_PROP_FRAME_HEIGHT, float(self.target_H))
       self.cap.set(cv.CAP_PROP_FPS, 25.0)
 
-    self.W = self.target_W if self.is_video_file else self.cap.get(cv.CAP_PROP_FRAME_WIDTH)
-    self.H = self.target_H if self.is_video_file else self.cap.get(cv.CAP_PROP_FRAME_HEIGHT)
+    # read_frames() 无条件将每一帧 resize 到 target_W/target_H（见下方），
+    # 所以对外暴露的分辨率必须始终是 target_W/target_H，不能用摄像头协商后的
+    # 实际分辨率（cap.get 返回值），否则 camerad.py 按此值分配的 VisionIPC buffer
+    # 大小会和实际产出的帧数据大小不一致，触发 `assert buf.len == len(data)` 崩溃。
+    # 实测：USB 摄像头请求 1928x1208 时驱动协商到 1920x1080（设备不支持精确尺寸），
+    # 此前用协商值导致 buffer=1920x1080 而数据=1928x1208，webcamerad 静默崩溃退出。
+    self.W = self.target_W
+    self.H = self.target_H
 
   @classmethod
   def bgr2nv12(self, bgr):
