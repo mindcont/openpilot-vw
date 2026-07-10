@@ -174,14 +174,18 @@ echo "=================================================="
 #
 # 时序关键（见第十五节）：CarParams 的参数标志是
 #   CLEAR_ON_MANAGER_START | CLEAR_ON_ONROAD_TRANSITION，
-#   manager 启动时(manager.py:46-47)和进 onroad 时(manager.py:199)各清一次，
-#   且 IsOnroad=True 在同轮清除之后才置位。因此必须等 IsOnroad=True 再注入，
-#   pre-manager 预写一定会被清掉（已验证）。
+#   manager 启动时(manager.py:46-47)和进 onroad 时(manager.py:199)各清一次。
+#   因此 pre-manager 预写一定会被清掉（已验证），必须等这两次清除都过去后再注入。
+#
+# 不能用 IsOnroad 做闸门（实机验证发现的坑）：IsOnroad 会残留上次运行的 stale
+#   True（关机不清），若据此在 manager 启动前就注入，会被 manager_init 清掉。
+#   故改为"看门狗"策略：不看 IsOnroad，只要 CarParams 缺失就补写，直到它连续稳定
+#   存在 STABLE_SECS 才判定已越过所有清除点并退出（硬上限 HARD_CAP_SECS 防孤儿）。
 #
 # 安全性：card 无 CAN 会一直阻塞，永远不置 ControlsReady=True；pandad 的
 #   setSafetyMode() 依赖 ControlsReady 才执行，故 panda 一直停在上电默认只读态
 #   （SILENT/NO_OUTPUT）。本注入天然只读，无需修改 card.py。若真车 CAN 接入，
-#   card 会正常识别并覆盖本注入（注入器仅在 CarParams 缺失时写），行为安全。
+#   card 会正常识别并写入（注入器仅在 CarParams 缺失时写，不覆盖），行为安全。
 #
 # 参数：notCar=True 是已验证可行的最简方式（与 run_laneline_demo.py 一致），
 #   wheelbase 用速腾真实值 2.731。需要更完整车辆几何时可改注入
@@ -196,28 +200,34 @@ from cereal import car
 params = Params()
 cp_bytes = car.CarParams(notCar=True, wheelbase=2.731, steerRatio=15.6).to_bytes()
 
-# 1) 等 onroad（已越过 CarParams 的清除点）
-t0 = time.time()
-while not params.get_bool("IsOnroad"):
-    if time.time() - t0 > 120:
-        print("[orinnx][inject] 等待 onroad 超时(120s)，仍尝试注入", flush=True)
-        break
-    time.sleep(0.5)
+STABLE_SECS = 10       # CarParams 连续存在这么久 -> 视为已越过所有清除点
+HARD_CAP_SECS = 180    # 安全上限，防止注入器长驻成孤儿进程
+POLL = 0.5
 
-# 2) 注入并短时守护，防止 onroad 转换清除后 card 因无 CAN 不补写
-deadline = time.time() + 20
-done = False
-while time.time() < deadline:
+start = time.time()
+ever_injected = False
+stable_since = None
+
+while time.time() - start < HARD_CAP_SECS:
     if params.get("CarParams") is None:
         params.put("CarParams", cp_bytes)
-        if not done:
+        stable_since = None
+        if not ever_injected:
             print("[orinnx][inject] 已注入 CarParams(notCar=True, wheelbase=2.731) 解除 modeld 阻塞", flush=True)
-            done = True
-    time.sleep(1)
-print("[orinnx][inject] CarParams 注入器退出" + ("（已注入）" if done else "（CarParams 已由 card 写入，未注入）"), flush=True)
+            ever_injected = True
+    else:
+        if stable_since is None:
+            stable_since = time.time()
+        elif ever_injected and time.time() - stable_since >= STABLE_SECS:
+            print("[orinnx][inject] CarParams 已稳定存在，注入器退出", flush=True)
+            break
+    time.sleep(POLL)
+else:
+    print("[orinnx][inject] 到达时间上限退出" +
+          ("（已注入）" if ever_injected else "（CarParams 一直存在，可能 card 已写入，未注入）"), flush=True)
 PY
 ) &
-echo "  [inject] CarParams 后台注入器已启动，等待 onroad 后注入以解除 modeld 阻塞"
+echo "  [inject] CarParams 后台看门狗注入器已启动（CarParams 缺失即补写，稳定后自退）"
 echo "=================================================="
 
 # 走正规 manager 流程：manager 会根据条件自动拉起
