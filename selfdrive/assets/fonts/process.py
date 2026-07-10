@@ -13,6 +13,18 @@ GLYPH_PADDING = 6
 EXTRA_CHARS = "–‑✓×°§•X⚙✕◀▶✔⌫⇧␣○●↳çêüñ–‑✓×°§•€£¥"
 UNIFONT_LANGUAGES = {"ar", "th", "zh-CHT", "zh-CHS", "ko", "ja"}
 
+# CAN 调试面板中文字体(WenQuanYiMicroHei-Debug.ttf)需要烘焙的汉字。
+# 该字体是仅含这些字形的 CJK 子集:不能走 base_cp(不含中文),也不必用 unifont_cp
+# (全量翻译字符集,过大)。构建时(SConscript 调 process.py)据此生成含中文的 .fnt。
+# 面板实际用字 + 预留的常用车辆/状态术语(见 make_debug_cjk_subset.py)。
+DEBUG_FONT_STEM = "wenquanyimicrohei-debug"
+DEBUG_CJK_CHARS = (
+  "车速仪表方向盘角度力矩档位刹踏板静止转灯巡航可用退避调试消息"
+  "油门制动加减弯左右前后无有是否已未启停状态报警错误正常"
+  "电压温流里程时间系统模型相机标定雷达经纬高线路径预测距离"
+  "目标障碍物横纵手动自动使能挡空挡倒挡驻车灯光转弯半径"
+)
+
 
 def _languages():
   if not LANGUAGES_FILE.exists():
@@ -117,13 +129,24 @@ def _process_font(font_path: Path, codepoints: tuple[int, ...]):
   _write_bmfont(FONT_DIR / f"{font_path.stem}.fnt", font_size, font_path.stem, atlas_name, line_height, base, (image.width, image.height), entries)
 
 
+def _debug_char_set():
+  chars = set(map(chr, range(32, 127))) | set(DEBUG_CJK_CHARS)
+  return tuple(sorted(ord(c) for c in chars))
+
+
 def main():
   base_cp, unifont_cp = _char_sets()
   fonts = sorted(FONT_DIR.glob("*.ttf")) + sorted(FONT_DIR.glob("*.otf"))
   for font in fonts:
     if "emoji" in font.name.lower():
       continue
-    glyphs = unifont_cp if font.stem.lower().startswith("unifont") else base_cp
+    stem = font.stem.lower()
+    if stem.startswith("unifont"):
+      glyphs = unifont_cp
+    elif stem == DEBUG_FONT_STEM:
+      glyphs = _debug_char_set()  # ASCII + 调试面板中文
+    else:
+      glyphs = base_cp
     _process_font(font, glyphs)
   return 0
 
