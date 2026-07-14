@@ -83,26 +83,29 @@
 
 ## 一、准备阶段（不接车，纯静态验证）
 
-- [ ] **1. 确认 panda 硬件与固件**
-  `lsusb` 确认识别到 panda；跑 `python3 -c "from panda import Panda; p = Panda(); print(p.get_version())"`
-  确认固件版本；跑 `tools/vw/check_panda_readonly.py` 确认默认态是只读
-  （初始应为 ELM327/silent，`controls_allowed=0`）。**此步不接车，纯 USB 接 Orin NX**。
+- [x] **1. 确认 panda 硬件与固件** ✅ 2026-07-15
+  Orin NX 上 `lsusb` 确认识别到 panda（`ID 3801:ddcc comma.ai panda`，序列号
+  `3e001d001051313338343730`，与 [环境搭建与容器部署.md](../环境搭建与容器部署.md)
+  第七节记录的是同一块硬件）。`Panda().get_version()` → `DEV-3dd38b76-DEBUG`。
+  `check_panda_readonly.py` 确认默认态：`safety_mode=0(silent)`，
+  `controls_allowed=0`，退出码 0（完全静默，不是 ELM327——说明当前未连接真实
+  CAN/未跑过 pandad，固件停在上电默认态）。**此步未接车，纯 USB 接 Orin NX**。
 
-- [ ] **2. 准备"真实 CAN 版"启动脚本（区别于当前纯视觉版）**
-  当前 `start_openpilot_orinnx.sh` 是 `NOBOARD=1` + 看门狗注入 `CarParams` 的纯视觉
-  路径，接入真实 CAN 后这条路径不再适用（`card` 不会阻塞，会自己走真实识别）。
-  需要建一个新版本或加分支开关，改动点：
-  - 去掉 `NOBOARD=1`（让 `pandad` 正常连接真实硬件）
-  - 去掉看门狗 `CarParams` 注入器（不再需要，`card` 会自己写）
-  - **保留** `OpenpilotEnabledToggle=False` 只读闸门（这是接真车后最重要的一行，
-    不能删）
-  - 保留 `FINGERPRINT=VOLKSWAGEN_SAGITAR_MK7` + `SKIP_FW_QUERY=1`（跳过固件查询，
-    避免走 R2 提到的诊断请求路径，且 `FW_VERSIONS`/`chassis_codes` 还是占位，自动
-    识别大概率识别不出来，继续用强制指定）
-  - `FORCE_ONROAD` 是否还需要：接入真实点火信号（钥匙 ON）后，`hardwared` 应该能
-    正常检测到 ignition，理论上不再需要强制；但保留也无害，可先保留过渡
-  - 建议：先另存一个新文件（如 `start_openpilot_orinnx_can.sh`），不要直接改现在
-    跑得好的纯视觉版本，两者独立，方便随时切回纯视觉验证基线
+- [x] **2. 准备"真实 CAN 版"启动脚本（区别于当前纯视觉版）** ✅ 2026-07-15
+
+  新建独立文件 `start_openpilot_orinnx_can.sh`（未改动现有跑得好的纯视觉版
+  `start_openpilot_orinnx.sh`，两者独立，可随时切回纯视觉基线）。改动点：
+  - 去掉 `NOBOARD=1`：让 `pandad` 正常连接真实 panda 硬件
+  - 去掉看门狗 `CarParams` 注入器：`card.py` 收到真实 CAN 后自己走
+    `get_car()` 识别并写入
+  - **保留** `OpenpilotEnabledToggle=False`（脚本内注释标注"最重要的一行，
+    不能删"，并引用 R1 复核结论说明为何对真实识别路径同样生效）
+  - 保留 `FINGERPRINT=VOLKSWAGEN_SAGITAR_MK7` + `SKIP_FW_QUERY=1`（注释引用 R2
+    复核结论说明这是为了避开主动发 CAN 请求的固件查询路径）
+  - `FORCE_ONROAD=1` 暂保留（先减少变量，跑通后再评估是否切换成真实 ignition）
+  - 摄像头/曝光/UI 配置与纯视觉版保持一致（复用已验证过的默认值）
+  - 脚本内多处注释直接指向本清单对应章节，方便现场执行时查阅依据
+  `bash -n` 语法检查通过；内嵌 python heredoc 块单独 `ast.parse` 语法检查通过。
 
 ## 二、Day 0：物理接线（车辆熄火，钥匙 OFF）
 
