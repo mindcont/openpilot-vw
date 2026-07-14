@@ -8,13 +8,14 @@ from openpilot.common.params import Params
 from openpilot.selfdrive.locationd.calibrationd import HEIGHT_INIT
 from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.system.hardware import PC
-from openpilot.system.ui.lib.application import gui_app
+from openpilot.system.ui.lib.application import gui_app, FontWeight
 from openpilot.system.ui.lib.shader_polygon import draw_polygon, Gradient
 from openpilot.system.ui.widgets import Widget
 
 CLIP_MARGIN = 500
 MIN_DRAW_DISTANCE = 10.0
 MAX_DRAW_DISTANCE = 100.0
+LEAD_DISTANCE_FONT_SIZE = 32
 
 THROTTLE_COLORS = [
   rl.Color(13, 248, 122, 102),   # HSLF(148/360, 0.94, 0.51, 0.4)
@@ -40,6 +41,8 @@ class LeadVehicle:
   glow: list[float] = field(default_factory=list)
   chevron: list[float] = field(default_factory=list)
   fill_alpha: int = 0
+  d_rel: float = 0.0
+  text_pos: tuple[float, float] = (0.0, 0.0)
 
 
 class ModelRenderer(Widget):
@@ -77,6 +80,8 @@ class ModelRenderer(Widget):
       cp = messaging.log_from_bytes(car_params, car.CarParams)
       self._longitudinal_control = cp.openpilotLongitudinalControl
 
+    self._lead_distance_font = gui_app.font(FontWeight.BOLD)
+
   def set_transform(self, transform: np.ndarray):
     self._car_space_transform = transform.astype(np.float32)
     self._transform_dirty = True
@@ -109,7 +114,9 @@ class ModelRenderer(Widget):
     model = sm['modelV2']
     radar_state = sm['radarState'] if sm.valid['radarState'] else None
     lead_one = radar_state.leadOne if radar_state else None
-    render_lead_indicator = self._longitudinal_control and radar_state is not None
+    # 前车距离显示不依赖 openpilotLongitudinalControl（本项目不控车，该值恒为
+    # False）。只要 radarState 有效即可渲染，纯展示用途，不涉及任何控制逻辑。
+    render_lead_indicator = radar_state is not None
 
     # Update model data when needed
     model_updated = sm.updated['modelV2']
@@ -257,7 +264,10 @@ class ModelRenderer(Widget):
     glow = [(x + (sz * 1.35) + g_xo, y + sz + g_yo), (x, y - g_yo), (x - (sz * 1.35) - g_xo, y + sz + g_yo)]
     chevron = [(x + (sz * 1.25), y + sz), (x, y), (x - (sz * 1.25), y + sz)]
 
-    return LeadVehicle(glow=glow, chevron=chevron, fill_alpha=int(fill_alpha))
+    # 距离文字画在 chevron 正上方
+    text_pos = (x, y - g_yo - LEAD_DISTANCE_FONT_SIZE - 4)
+
+    return LeadVehicle(glow=glow, chevron=chevron, fill_alpha=int(fill_alpha), d_rel=d_rel, text_pos=text_pos)
 
   def _draw_lane_lines(self):
     """Draw lane lines and road edges"""
@@ -312,6 +322,18 @@ class ModelRenderer(Widget):
 
       rl.draw_triangle_fan(lead.glow, len(lead.glow), rl.Color(218, 202, 37, 255))
       rl.draw_triangle_fan(lead.chevron, len(lead.chevron), rl.Color(201, 34, 49, lead.fill_alpha))
+      self._draw_lead_distance_text(lead)
+
+  def _draw_lead_distance_text(self, lead: 'LeadVehicle'):
+    """在 chevron 上方画出前车相对距离(米)，纯展示用，不影响任何控制逻辑"""
+    text = f"{lead.d_rel:.0f}m"
+    size = rl.measure_text_ex(self._lead_distance_font, text, LEAD_DISTANCE_FONT_SIZE, 0)
+    tx = lead.text_pos[0] - size.x / 2
+    ty = lead.text_pos[1] - size.y / 2
+    # 黑色描边(四个方向各偏移1px)保证在任意背景下可读，再叠白色文字
+    for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+      rl.draw_text_ex(self._lead_distance_font, text, rl.Vector2(tx + dx, ty + dy), LEAD_DISTANCE_FONT_SIZE, 0, rl.Color(0, 0, 0, 220))
+    rl.draw_text_ex(self._lead_distance_font, text, rl.Vector2(tx, ty), LEAD_DISTANCE_FONT_SIZE, 0, rl.Color(255, 255, 255, 255))
 
   @staticmethod
   def _get_path_length_idx(pos_x_array: np.ndarray, path_distance: float) -> int:
