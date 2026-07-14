@@ -23,47 +23,63 @@
 
 ### 待复核问题（实车接入前，在本地/远程先做完，不需要车）
 
-- [ ] **R1. 复核 `card.py` 真实识别分支下，两道闸门是否依然生效**
-  当前只验证过 `CI=None`（走 `get_car()`）分支的代码逻辑（第十五节的静态分析），
-  没有实测跑过。需要确认：`OpenpilotEnabledToggle=False` 时，即便 `get_car()` 识别出
-  真实车型、`CI.CC` 不是 `None`，`controller_available` 依然会被算成 `False`
-  （`card.py` 第 114-116 行的重算逻辑对真实识别路径同样生效，不只对注入路径生效）。
-  方法：读代码确认这段逻辑在 `if CI is None` 分支之后统一执行，不分叉。
+- [x] **R1. 复核 `card.py` 真实识别分支下，两道闸门是否依然生效** ✅ 2026-07-15 确认
 
-- [ ] **R2. 复核 `pandad` 的安全模式切换时序，是否存在"中途可写"的时间窗口**
-  `panda_safety.cc` 的 `fetchCarParams()` 依赖 `FirmwareQueryDone` + `ControlsReady`
-  两个 Param 都为真才会调 `setSafetyMode()`。真实识别路径下 `card.py` 在
-  `get_car()` 后主动 `put_bool("FirmwareQueryDone", True)`（当前注入路径不会走到这一
-  行）。需要确认：这一行执行时，`OpenpilotEnabledToggle=False` 的效果（`passive=True`
-  → `safetyConfigs=[noOutput]`）是否已经在同一次 `CarParams.to_bytes()` 里体现，
-  即 `pandad` 读到的 `CarParams` 从一开始就是 `noOutput`，不存在"先写了非只读配置、
-  过一会儿才纠正"的中间态。
-  另外确认：`pandad` 初始状态是 `ELM327`（用于固件查询指纹），这个模式本身是否会
-  发送任何 CAN 帧（诊断请求属于主动发送，需要搞清楚 `ELM327` 安全模式下 `openpilot`
-  是否会真的发 OBD 诊断请求帧——若会，即便只是标准诊断请求也脱离"纯只读"的目标，
-  需要 `SKIP_FW_QUERY=1` 保留，跳过整个固件查询环节，避免这条路径）。
+  **结论：生效。** `card.py` 第 113-119 行的重算逻辑
+  （`openpilot_enabled_toggle`判断 → `self.CP.passive` → `safetyConfigs=[noOutput]`）
+  在 `if CI is None`（真实识别）与 `else`（注入）两个分支**之后统一执行，代码路径
+  不分叉**。无论 `CI` 是通过 `get_car()` 真实识别出来的，还是外部注入的，走到这里
+  都会用同一段代码重算 `passive`。`OpenpilotEnabledToggle=False` 时
+  `controller_available=False` → `self.CP.passive=True` → `safetyConfigs`
+  被强制覆盖为 `[noOutput]`，与 `CI` 的来源无关。**闸门在真实 CAN 场景下依然生效**。
 
-- [ ] **R3. 评估是否需要第三道防线：物理层只读**
-  软件闸门+固件闸门都是"配置层"防护，理论上如果 panda 固件本身有 bug 或被误刷成
-  别的配置，配置层防护可能失效。评估是否有条件加一道更硬的物理防线，例如：
-  - 使用**只做 CAN 分析/嗅探用途的接口**（很多 CAN 分析仪/嗅探器硬件上 TX 线直接
-    不焊/不接，物理层就不可能发送），代替能双向读写的 panda，专门用于本项目的
-    "只读取车速/方向盘"需求
-  - 或确认 comma panda 硬件本身是否有能让 TX 收发器直接断电/禁用的方式
-  这一步是加分项，不是硬性前提，但如果轻松可行应该优先做（比纯配置防护更可靠）。
-  需要现有硬件条件允许才能评估，不确定可先跳过，用现有双闸门方案，后续再补。
+- [x] **R2. 复核 `pandad` 的安全模式切换时序，是否存在"中途可写"的时间窗口**
+  ✅ 2026-07-15 确认，**发现一个需要新增防护的点**
 
-- [ ] **R4. 确认之前 CAN 抓包时的接入方式是否还在车上**
-  [大众速腾CAN抓包解析报告.md](大众速腾CAN抓包解析报告.md) 记录的抓包方式是
-  "openpilot「红熊」+ panda（J533 网关接入）"，说明之前已经有过一次物理接线
-  （通过 J533 网关，即拆后视镜盖板串接前视摄像头那套接法，见
-  [硬件改造.md](../硬件改造.md)）。需要确认：
-  1) 那次接线是否是一次性的（抓完包就拆了），还是至今仍物理连着车
-  2) 如果还连着，用的是哪块 panda（型号/固件版本），現在能不能直接复用
-  3) 如果已经拆了，需要重新决定接入点：复用 J533 网关（已验证过信号完整性最高，
-     但需要拆内后视镜盖板），或改用更简单的 OBD-II 接口（免拆，但需要额外确认
-     OBD-II 诊断口在网关多路复用关闭时能不能透传出 `ESP_19`/`LWI_01` 这些目标信号，
-     之前的评估文档没有针对 OBD-II 接入点做验证，只针对 J533 网关接入验证过）
+  **(a) 写入时序无中间态风险**：`self.CP.to_bytes()` 写入 `CarParams` 时，
+  `passive`/`safetyConfigs` 的赋值已在同一次 `__init__` 同步代码里完成。
+  `pandad` 侧 `fetchCarParams()` 要 `FirmwareQueryDone` **和** `ControlsReady`
+  都为真才读取 `CarParams`；而 `ControlsReady` 只在 `controls_update()` 里置位，
+  `controls_update()` 只在 `self.CP.passive=False` 时才会被 `step()` 调用。
+  `OpenpilotEnabledToggle=False` → `passive` 恒为 `True` → `controls_update()`
+  永远不被调用 → `ControlsReady` 永远不会置位 → `pandad.setSafetyMode()`
+  **永远不会执行，panda 固件会一直停留在初始的 `ELM327` 模式，绝不会被切换到
+  真实车型的可控 safety mode**。这条链路是自洽的，无中途可写窗口。
+
+  **(b) ELM327 模式本身允许发送标准诊断帧 —— 之前设计未充分考虑，需新增防护**：
+  查阅 `opendbc_repo/opendbc/safety/modes/elm327.h` 的 `elm327_tx_hook`，
+  **确认它允许发送 ISO 15765-4 标准诊断帧**（8 字节，地址在
+  `0x18DB33F1`/`0x18DA00F1`系/`0x600-0x6FF`/`0x700-0x7FF` 等诊断地址范围）。
+  `SKIP_FW_QUERY=1` 只能让 `car_helpers.py` 的 `fingerprint()` 跳过
+  `get_vin()`/`get_present_ecus()`/`get_fw_versions_ordered()` 这些**openpilot
+  软件层主动发起**固件查询的代码路径，**不能改变 panda 固件本身处于的
+  safety_model**——固件既然停留在 ELM327（见 (a)），理论上任何触发 TX 的路径都
+  会被这个 hook 放行（只要符合诊断帧格式），不只是 `fingerprint()` 那一条路径。
+
+  **已处理**：`tools/vw/check_panda_readonly.py` 已更新，把 `elm327`（值=3）单独
+  归为"需人工确认"档（区别于 `silent`/`noOutput` 的"完全静默"），脚本会明确提示
+  该模式允许发送诊断帧、不是绝对零发送，退出码非0需要人工判断是否可接受。
+  **结论：ELM327 不会发送转向/加速等控制指令（最大风险已封死），但严格来说不是
+  100% 零发送，如需更高保证需要评估 R3 物理层防线。**
+
+- [x] **R3. 评估是否需要第三道防线：物理层只读** ✅ 2026-07-15 决定：暂不追加
+
+  确认现有硬件是**普通双向读写 panda**（非专用只读嗅探设备），没有现成的物理层
+  TX 禁用条件。**决定：不追加物理层防线，用现有软件+固件双闸门方案继续**。
+  依据：R2 已确认最大风险（切换到真实车型可控 safety mode 发送转向/加速指令）
+  被完全封死；ELM327 阶段允许的诊断帧风险已知且可接受（不是行驶控制报文，
+  `check_panda_readonly.py` 会在检测到 ELM327 时提示需人工关注）。若后续想进一步
+  收紧，可以考虑单独采购只读嗅探硬件，但不阻塞当前验证。
+
+- [x] **R4. 确认之前 CAN 抓包时的接入方式是否还在车上** ✅ 2026-07-15 决定：走 J533 网关
+
+  **决定接入点：复用 J533 网关**（[大众速腾CAN抓包解析报告.md](大众速腾CAN抓包解析报告.md)
+  记录过的接入方式，已验证信号完整性最高，17/17 carState 依赖消息全部可获取）。
+  需要在下面「二、Day 0：物理接线」步骤 3 现场确认：
+  1) 之前抓包那次接线是否还物理连着车，还是已经拆了需要重新接
+  2) 如果还连着，核对具体是哪块 panda（型号/固件版本），能否直接复用
+  不选 OBD-II 路线（未验证过该接入点能否透传目标信号，J533 已验证过，优先复用
+  已验证路径）。
 
 ## 一、准备阶段（不接车，纯静态验证）
 
