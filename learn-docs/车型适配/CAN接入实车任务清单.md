@@ -1,6 +1,8 @@
 # 第二阶段：接入真实 CAN 实车任务清单（只读，不控车）
 
-> 状态：🔄 未开始。前置可行性评估见
+> 状态：🔄 进行中（2026-07-15）。零/一/二已全部完成，三的步骤 5-7 已通过，步骤 8
+> 遇到技术卡点（`pandad` 未能从 panda 读到真实 CAN 数据转发给 `card`，详见步骤 8
+> 记录），已安全收尾，明天继续排查。前置可行性评估见
 > [第二阶段_接入CAN可行性评估.md](第二阶段_接入CAN可行性评估.md)（结论：能，完全满足
 > 车道显示+预测的需求）。本文档是把评估落到实车的**分步执行清单**，核心底线：
 > **CAN 只读，任何情况下不向总线发送任何数据**。每一步都先做只读校验，通过才进
@@ -168,13 +170,61 @@
   `safety_mode=0(silent)`，`controls_allowed=0`，退出码 0，与步骤 5 的上电前基线
   完全一致。确认接收大量真实 CAN 数据不会对 panda 固件安全态产生任何影响。
 
-- [ ] **8. 启动"真实 CAN 版"openpilot（步骤 2 准备的脚本）**
-  观察：
-  1) `card.py` 是否正常初始化，`FINGERPRINT` 强制指定是否生效
-  2) `carState` 是否开始正常产出（用之前验证过的
-     `cereal.messaging.SubMaster(['carState'])` 订阅脚本）
-  3) `vEgo`/方向盘角度等信号是否与仪表显示一致（车速应为 0，方向盘角度可转动方向盘
-     观察是否跟随变化）
+- [ ] **8. 启动"真实 CAN 版"openpilot（步骤 2 准备的脚本）** 🔄 进行中，2026-07-15
+  中断，明天继续
+
+  首次用 `start_openpilot_orinnx_can.sh`（`SINGLE_CAM=1`）启动，发现 `card.py`
+  卡住，`carState` 15 秒内 0 帧。排查过程与当前定位（**未修复，留给下次接手**）：
+
+  **表面现象**：`card` 进程 CPU 占用低但存活，`FirmwareQueryDone`/`ControlsReady`
+  均为 `False`，`CarParams` 不存在。`py-spy dump`（用 `sudo -S` 传密码后可用，
+  `~/.local/bin/py-spy`）两次采样均确认卡在 `card.py:88`
+  （`messaging.recv_one_retry(self.can_sock)`，即等待第一条**非空** CAN 包）。
+
+  **关键诊断发现**：
+  1. 直接用 `panda` Python 库连接（绕开 `pandad`）能正常收到大量真实 CAN 帧
+     （之前步骤 6/7 已验证），说明硬件、接线、panda 固件本身没问题。
+  2. 但订阅 `pandad` 发布的 `can` 消息通道（`cereal.messaging.SubMaster(['can'])`
+     或直接 `sub_sock('can')`+`receive()`），收到的消息**频率正常**（近 100Hz，
+     心跳级别），但消息里的 `can` 字段（实际 CAN 帧列表）**持续为空**
+     （多次采样，数百到近千条消息，`nonempty` 计数均为 0）。
+  3. 追查 `selfdrive/pandad/pandad.cc` 的 `can_receive()`：从 panda bulk endpoint
+     `0x81` 读数据，`bulk_read` 返回 0 字节时不解包，`can` 字段自然为空——问题
+     指向 `pandad` 从 panda 硬件读 USB bulk 数据这一步没有读到东西。
+  4. 追查 `panda_safety.cc` 的 `configureSafetyMode(is_onroad)`：只有
+     `is_onroad=True` 才会执行 `updateMultiplexingMode()`（切到 `ELM327`
+     并开始正常的多路复用/CAN 转发配置流程）。`is_onroad` 来自
+     `params.getBool("IsOnroad")`——**这是一个独立于 `FORCE_ONROAD` 环境变量的
+     Param**，由 `system/manager/helpers.py` 的 `write_onroad_params(started, ...)`
+     写入，`started` 来自 `hardwared.py` 算出的 `deviceState.started`。
+  5. 实测 `safety_mode` 稳定读到 `19(noOutput)`（不是 `updateMultiplexingMode()`
+     应该设置的初始值 `ELM327(3)`），且从未变化——**怀疑 `pandad` 从未真正执行过
+     这条初始化路径**，当前的 `noOutput` 可能是 panda 硬件断电前遗留的状态
+     （safety_mode 不是每次都会被重置，取决于是否真正走到 `setSafetyMode()`）。
+
+  **当前假设（未证实，明天first要验证）**：`IsOnroad` 这个 Param 在本次运行期间
+  可能一直是 `False`（或者写入时序落后于 `card`/`pandad` 读取的时间点），导致
+  `pandad` 的 `configureSafetyMode` 从未真正把 panda 切到正常 CAN 转发模式。
+  这与 [环境搭建与容器部署.md](../环境搭建与容器部署.md) 第十五节记录过的
+  `IsOnroad` stale 状态坑是同一个 Param，但表现方向相反（那次是 stale `True`
+  导致过早注入，这次疑似 `False`/时序不对导致 `pandad` 配置不完整）。
+
+  **明天继续的具体步骤**：
+  1. 运行期间实测 `Params().get_bool("IsOnroad")` 的实际值和变化时序，对照
+     `deviceState.started` 与 `manager.py:213-214` 的 `write_onroad_params` 调用时机
+  2. 如果确认是 `IsOnroad` 时序或取值问题，需要搞清楚为什么这次（真实 CAN 版）
+     与之前纯视觉版（`NOBOARD=1`）表现不同——纯视觉版走看门狗注入绕开了
+     `card`/`pandad` 的正常初始化路径，从未真正测过 `pandad` 这条 onroad 判断逻辑
+  3. 排查时**不要同时用多个脚本反复直连 panda 库**（会与 `pandad` 产生 USB 层面
+     竞争，实测出现过 `usb1.USBErrorBusy`，可能干扰观测结果，需要先停掉所有直连
+     诊断脚本，只留 `pandad` 独占访问后再观察）
+  4. 这一步排查未触及任何安全边界——全程 `check_panda_readonly.py` 反复确认
+     `controls_allowed=0`，收尾时确认 `safety_mode` 回落到 `silent`，只读闸门
+     未受影响
+  5. `FirmwareQueryDone`/`ControlsReady` 沿本清单 R2 的复核结论，`card` 一旦真的
+     跑完 `get_car()` 应该能顺利往下走（`OpenpilotEnabledToggle=False` 闸门在
+     真实识别路径下已验证生效，见 R1），当前卡点在更早的"等第一条非空 CAN"这一步，
+     R1/R2 的结论本身不受这次卡点影响
 
 - [ ] **9. openpilot 运行期间持续只读核实**
   openpilot 跑起来之后，每隔 10-20 秒跑一次 `check_panda_readonly.py`（可以写个循环
