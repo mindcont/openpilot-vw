@@ -5,6 +5,12 @@
 
 用法:
   python3 decode_can.py <csv> <dbc> [bus]
+  python3 decode_can.py <csv> <dbc> [bus] --series <消息名>.<信号名>
+
+不带 --series 时打印全部关键信号的 min/max 摘要（有变化会标 "<-- 有变化"）。
+带 --series 时打印该信号完整的 (时间, 数值) 序列，用于动态验证场景
+（比如转方向盘/挂挡时确认数值随操作实时正确变化，而不只是看一个 min/max 摘要），
+见 learn-docs/车型适配/CAN数据抓取解析验证清单.md。
 
 CSV 格式: time,addr,bus,data  (cabana 导出)
 默认 bus=0（动力总成 CAN）。依赖: cantools
@@ -31,7 +37,7 @@ def fmt(v):
     return str(v)
 
 
-def main(csv_path, dbc_path, bus_filter=0):
+def main(csv_path, dbc_path, bus_filter=0, series_target=None):
     db = cantools.database.load_file(dbc_path, strict=False)
     id_to_msg = {m.frame_id: m for m in db.messages}
 
@@ -61,6 +67,22 @@ def main(csv_path, dbc_path, bus_filter=0):
                 msg_frames[msg.name].append((t, decoded))
             except Exception:
                 pass
+
+    if series_target:
+        msg_name, _, sig_name = series_target.partition(".")
+        frames = msg_frames.get(msg_name)
+        if not frames:
+            print(f"未找到消息 {msg_name}（bus {bus_filter} 上没有解析出这条消息）")
+            return
+        t0 = frames[0][0]
+        print(f"# {msg_name}.{sig_name} 时间序列（共 {len(frames)} 帧，t0={t0:.3f}）")
+        print(f"{'t(s)':>10s}  {'t-t0(s)':>10s}  {sig_name}")
+        for t, dec in frames:
+            if sig_name not in dec:
+                print(f"信号 {sig_name} 不在 {msg_name} 中，可选: {list(dec.keys())}")
+                return
+            print(f"{t:10.3f}  {t - t0:10.3f}  {fmt(dec[sig_name])}")
+        return
 
     print(f"bus {bus_filter} 成功解析 {len(matched_ids)} 种消息\n")
     print("=" * 70)
@@ -92,5 +114,11 @@ if __name__ == "__main__":
     if len(sys.argv) < 3:
         print(__doc__)
         sys.exit(1)
-    bus = int(sys.argv[3]) if len(sys.argv) > 3 else 0
-    main(sys.argv[1], sys.argv[2], bus)
+    args = sys.argv[1:]
+    series = None
+    if "--series" in args:
+        idx = args.index("--series")
+        series = args[idx + 1]
+        del args[idx:idx + 2]
+    bus = int(args[2]) if len(args) > 2 else 0
+    main(args[0], args[1], bus, series)
