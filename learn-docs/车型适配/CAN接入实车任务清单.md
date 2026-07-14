@@ -135,15 +135,38 @@
     问题**，纯粹是这次插接方向与 [环境搭建与容器部署.md](../环境搭建与容器部署.md)
     第七节记录的上次（`flipped`）不同，两种方向 panda 都能正确处理。
 
-- [ ] **6. 钥匙 ON（发动机不启动），观察 CAN 总线原始流量（不启动 openpilot）**
-  用 `cabana` 或 `can_capture_daemon` 之类工具**只监听**，确认能收到 CAN 帧（说明
-  接线通），且**此时还没启动 openpilot 相关进程**，总线上不应有任何来自 Orin/panda
-  的新增地址（用之前 J533 抓包的地址列表做基线比对，若接线正确、只读，总线上的
-  报文种类应该和以前抓包时一致，不多不少）。
+- [x] **6. 钥匙 ON（发动机不启动），观察 CAN 总线原始流量（不启动 openpilot）** ✅ 2026-07-15
 
-- [ ] **7. 再次只读核实**
-  `check_panda_readonly.py` 再跑一次，确认收到真实 CAN 帧后固件状态没有变化
-  （还是只读）。
+  钥匙 ON、openpilot 相关进程确认未启动（`pgrep` 确认 manager/selfdrive/webcam
+  全部未运行）时，用新建的 `tools/vw/can_analysis/passive_listen.py`
+  （只调用 `can_recv()`，从不调用 `can_send`）监听 15 秒：
+  - 15 秒内收到 79565 帧，三条总线（0/1/2）均有数据，接线确认通
+  - `ignition_line=1`，与实际钥匙 ON 状态一致
+  - 监听前后 `safety_mode=0(silent)`/`controls_allowed=0` **完全未变化**，纯监听
+    没有对 panda 状态产生任何影响
+  - bus0 103 种地址，与 [大众速腾CAN抓包解析报告.md](大众速腾CAN抓包解析报告.md)
+    记录的历史基线（88 个标准帧+21 个扩展帧）量级一致，未见异常暴增
+
+  进一步用同样纯监听方式采集 12 秒 CSV（`/tmp/capture_can_csv.py`，监听前后同样
+  确认 `safety_mode`/`controls_allowed` 无变化），跑现成解析脚本核对：
+  ```
+  check_carstate_deps.py: 17/17 carState 依赖消息全部命中，且全部在 bus0
+  ```
+  抽查关键信号数值自洽性（比历史静态抓包报告更进一步，这次是钥匙 ON 场景）：
+  - `ESP_19` 四轮速全部 `0.000`（车辆静止，发动机未启动，符合预期）
+  - `Getriebe_11.GE_Fahrstufe = 'P'`（停车挡，符合当前场景）
+  - `LWI_01.LWI_Lenkradwinkel=16.700°` 与 `LH_EPS_03.EPS_Berechneter_LW=16.200°`
+    两个独立信号源互相印证（相差 0.5° 在合理误差范围），确认方向盘角度信号映射
+    正确，不是巧合数值
+  - `LH_EPS_03.EPS_HCA_Status='initializing'`，与历史报告记录的结论一致
+
+  **结论：接线确认通、carState 依赖信号 17/17 全部可获取且数值自洽、纯监听全程
+  未改变 panda 安全态。**
+
+- [x] **7. 再次只读核实** ✅ 2026-07-15
+  步骤 6 收到大量真实 CAN 帧（79565+64482 帧）之后再跑 `check_panda_readonly.py`：
+  `safety_mode=0(silent)`，`controls_allowed=0`，退出码 0，与步骤 5 的上电前基线
+  完全一致。确认接收大量真实 CAN 数据不会对 panda 固件安全态产生任何影响。
 
 - [ ] **8. 启动"真实 CAN 版"openpilot（步骤 2 准备的脚本）**
   观察：
