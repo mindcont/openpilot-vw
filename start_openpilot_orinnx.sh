@@ -86,13 +86,15 @@ export WIDE_CAM_EXPOSURE=${WIDE_CAM_EXPOSURE:-50}
 export ROAD_CAM_GAIN=${ROAD_CAM_GAIN:-40}
 export WIDE_CAM_GAIN=${WIDE_CAM_GAIN:-40}
 
-# 软件自动曝光（方案 B，★ 默认关闭 ★，见 tools/webcam/auto_exposure.py）：
+# 软件自动曝光（方案 B，★ 默认开启 ★，见 tools/webcam/auto_exposure.py）：
 # 早中晚/室内外光照差异大，上面这组固定值只适配单一场景（本节已实测三组不同值）。
 # AUTO_EXPOSURE=1 时，camera.py 会在采集循环里以 1Hz 测量道路 ROI 灰度均值，
 # 与目标灰度比较后用平滑反馈环自动微调 exposure_time_absolute/gain，
 # 上面 *_EXPOSURE/*_GAIN 仅作为初始值（闭环启动后会持续调整覆盖它们）。
-# 建议先手动验证链路正常，再开这个开关观察是否稳定收敛。
-export AUTO_EXPOSURE=${AUTO_EXPOSURE:-0}
+# 2026-07-14 已在 Orin NX 实机完成端到端验证：真实道路画质、帧率/laneLineProbs
+# 无回归、光照突变(遮挡镜头)约50秒内平滑收敛且长时间无震荡，三项均通过，见
+# learn-docs/环境搭建与容器部署.md 第十七节。如遇异常可临时 AUTO_EXPOSURE=0 回退。
+export AUTO_EXPOSURE=${AUTO_EXPOSURE:-1}
 
 function set_camera_exposure() {
   local dev="/dev/video$1"

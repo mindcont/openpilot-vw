@@ -23,13 +23,12 @@
 | [车型适配/CAN数据抓取解析验证清单.md](车型适配/CAN数据抓取解析验证清单.md) | 🔄 | 动态验证CAN信号随真实操作(转向/挂挡/刹车/车速)变化，不依赖openpilot |
 | [车型适配/Orin_NX_部署指南.md](车型适配/Orin_NX_部署指南.md) | ✅ | Jetson Orin NX 双摄像头生产部署 |
 | [车型适配/远程调试指南.md](车型适配/远程调试指南.md) | ✅ | 远程调试方法 |
-| [Orin_NX_验证任务清单.md](Orin_NX_验证任务清单.md) | 🔄 | Orin NX 断网续接：Bug2注入/UI全屏/软件自动曝光待实机验证清单 |
 | [大众车型DBC文件映射分析.md](大众车型DBC文件映射分析.md) | ✅ | MQB/PQ/MLB 平台与 DBC 映射（今日验证结论正确）|
 | [openpilot_车型指纹配置指南.md](openpilot_车型指纹配置指南.md) | ✅ | FINGERPRINT 配置（代理指纹路线）|
 | [VOLKSWAGEN_GOLF_MK7_CAN解析服务加载流程.md](VOLKSWAGEN_GOLF_MK7_CAN解析服务加载流程.md) | 📖 | 车型识别→DBC 加载→CAN 服务链路 |
 | [车型适配/openpilot_车型加载逻辑分析.md](车型适配/openpilot_车型加载逻辑分析.md) | 📖 | 车型加载机制分析 |
 | [车型适配/VEHICLE_ADAPTATION_GUIDE.md](车型适配/VEHICLE_ADAPTATION_GUIDE.md) | 📖 | 通用车型适配架构（含控车调参，控车部分不适用本项目）|
-| 车型适配/archive/ | 🗄️ | 早期 SAGITAR_MK8 补丁路线等，见该目录 README |
+| 车型适配/archive/ | 🗄️ | 早期 SAGITAR_MK8 补丁路线、Orin NX 验证任务清单（已完成）等，见该目录 README |
 
 ## 二、视频 / 摄像头 / 视觉流水线
 
