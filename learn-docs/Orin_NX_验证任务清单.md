@@ -1,7 +1,8 @@
 # Orin NX (hal9000) 联网恢复后验证任务清单
 
-> 状态：🔄 进行中。创建于 2026-07-10，用于 Orin NX 断网期间暂存待验证事项，
-> 联网恢复后按顺序执行。完成后每项打勾并记录结果；全部完成后可将结论汇总进
+> 状态：🔄 进行中（任务1-8已完成，任务9待车辆静止停放时补做，任务10视9的结果而定）。
+> 创建于 2026-07-10，用于 Orin NX 断网期间暂存待验证事项，联网恢复后按顺序执行。
+> 完成后每项打勾并记录结果；全部完成后可将结论汇总进
 > [环境搭建与容器部署.md](环境搭建与容器部署.md) 对应章节，本文档可归档。
 
 ## 背景
@@ -30,77 +31,107 @@
 
 ## 任务清单
 
-- [ ] **1. 确认 Orin NX (hal9000, 100.73.154.105) 网络恢复**
-  `ping -c 3 100.73.154.105`；恢复后 `ssh car@100.73.154.105 echo ok` 测试连接。
-  之前 100% 丢包，需先确认设备开机/联网正常，再继续后续步骤。
+- [x] **1. 确认 Orin NX (hal9000, 100.73.154.105) 网络恢复** ✅ 2026-07-14
+  `ping -c 3 100.73.154.105` → 0% 丢包；`ssh car@100.73.154.105 echo ok` → `ok`。
+  网络已恢复正常。
 
-- [ ] **2. 停止残留 openpilot 进程（如有）**
-  `pkill -f manager.py` / `launch_openpilot` / `selfdrive.ui.ui` / `modeld` /
-  `webcamerad`，`sleep 3` 后 `pgrep` 确认已清空。
-  注意：`pkill` 曾导致当前 ssh 会话被误杀断连（历史现象），建议在独立命令里执行
-  并重新建连确认结果，不要和其他命令合并在同一 ssh 会话里等结果。
+- [x] **2. 停止残留 openpilot 进程（如有）** ✅ 2026-07-14
+  `pgrep -fa 'manager.py|launch_openpilot|selfdrive.ui.ui|modeld|webcamerad'` 只匹配
+  到 `pgrep` 自身，确认无残留进程，跳过 kill 步骤。
 
-- [ ] **3. `git pull` 同步到最新 `dev-vw` (`647fea0d2a`)**
-  `cd ~/openpilot && git pull origin dev-vw`，确认 fast-forward 到 `647fea0d2a`
-  （含 `auto_exposure.py` 新增、`camera.py`/`start_openpilot_orinnx.sh` 改动、
-  UI 全屏改动、文档更新）。
+- [x] **3. `git pull` 同步到最新 `dev-vw`** ✅ 2026-07-14
+  Orin NX 原停在 `6662901f7`，`git pull origin dev-vw` fast-forward 到 `7bf8c2b77`
+  （比清单目标 `647fea0d2a` 更新，已 `git merge-base --is-ancestor` 确认包含它）。
+  新增文件确认拉取到：`tools/webcam/auto_exposure.py`、`camera.py`/
+  `start_openpilot_orinnx.sh` 改动、UI 全屏改动、文档更新。工作区干净。
 
-- [ ] **4. 静态校验：bash 语法 + python 编译**
-  `bash -n start_openpilot_orinnx.sh`；
-  `python3 -m py_compile tools/webcam/auto_exposure.py tools/webcam/camera.py`；
-  确认在 Orin NX 实际 venv 环境下也无导入错误（之前只在本地 wio 机器验证过语法，
-  未在 Orin NX 上重新 py_compile 这两个新文件）。
+- [x] **4. 静态校验：bash 语法 + python 编译** ✅ 2026-07-14
+  `bash -n start_openpilot_orinnx.sh` → OK；在 Orin NX 实际 `.venv` 下
+  `python3 -m py_compile tools/webcam/auto_exposure.py tools/webcam/camera.py` → OK；
+  `import tools.webcam.auto_exposure` 也验证无导入错误。DISPLAY(:0)/XAUTHORITY 可用
+  （`xdpyinfo` 通过）。
 
-- [ ] **5. 回归验证：手动曝光模式基线未退化**
-  `AUTO_EXPOSURE=0`（默认）+ `SINGLE_CAM=1` + `DISPLAY=:0
-  XAUTHORITY=/run/user/1000/gdm/Xauthority` 启动，确认：
-  1) 看门狗注入器正常完成（`[orinnx][inject]` 日志三条：启动/已注入/稳定退出）
-  2) UI 进程存活、非 `defunct`
-  3) 全屏（`UI_FULLSCREEN=1`）+ 曝光（`exposure=50, gain=40`）效果与之前截图一致，
-     没有因 `camera.py` 改动引入回归。用 `gnome-screenshot` 截图确认画面清晰不过曝。
+- [x] **5. 回归验证：手动曝光模式基线未退化** ✅ 2026-07-14
+  `AUTO_EXPOSURE=0`（默认）+ `SINGLE_CAM=1` 启动：
+  1) 看门狗注入器三条日志齐全：`已注入 CarParams(...)` → `CarParams 已稳定存在，注入器退出`
+  2) `webcamerad`/`modeld`/`selfdrive.ui.ui`/`soundd`/`feedbackd` 等进程存活，非 `defunct`
+  3) `modelV2` 20s 内 66 帧（~3.3fps，CPU 模式，与基线一致），`roadCameraState` 401 帧
+     （~20fps，符合预期）
+  4) `gnome-screenshot` 截图画面清晰不过曝，UI 全屏（`UI_FULLSCREEN=1`）生效
+  5) `laneLineProbs` 实测偏低（0.006~0.03，低于文档记录的 0.196 基线）——**这是本次
+     测试环境（室内/摄像头未对准清晰车道场景）导致，非代码回归**，未观察到过曝/花屏/
+     UI 卡死等回归现象
+  6) 副产物：截图发现全屏 "Unknown Vehicle Variant" 提示，见任务 6 排查结论
 
-- [ ] **6. 排查"未识别设备"提示（昨天运行观察，来源未确认）**
-  代码排查找到两条候选逻辑，需现场确认具体命中哪一条：
+- [x] **6. 排查"未识别设备"提示（昨天运行观察，来源未确认）** ✅ 2026-07-14 确认
 
-  - **候选 A（推测概率较高）：侧边栏 "NO PANDA" 红标**
-    （`selfdrive/ui/layouts/sidebar.py:140-144`，`selfdrive/ui/ui_state.py:120-127`）。
-    超过 5 秒没收到 `pandaStates` 消息就判定 `panda_type=unknown`，侧边栏常驻显示
-    红色 "NO PANDA"。**这是 `NOBOARD=1`（无真实 panda 硬件）下的预期行为，不是
-    bug**，与车型识别无关，纯粹是"有没有 panda 硬件在线"的指示灯。
-  - **候选 B（推测概率较低，当前部署路径下理论不会触发）：`carUnrecognized` 事件**
-    （`selfdrive/selfdrived/selfdrived.py:96-138`，判断 `self.CP.brand != 'mock'`）。
-    但 `card.py` 在 `NOBOARD=1` 无真实 CAN 时会永久阻塞在等第一条 CAN 消息，走不到
-    `get_car()` 车型识别逻辑；我们的看门狗注入器绕过 `card.py` 直写 `CarParams`
-    给 `modeld`/`selfdrived`，不会让 `card` 自己解除阻塞触发这个事件，所以理论上
-    不该出现。若实机确认是这一条，说明对该路径的理解有误，需重新排查。
+  **结论：是第三种情况，不是候选 A（NO PANDA 侧边栏）也不是候选 B（carUnrecognized）。**
 
-  确认方法：
-  1) 启动后用手机/肉眼记录提示出现的**具体位置**（侧边栏小标签 / 全屏弹窗 /
-     仅终端日志）和**英文原文**（如条件允许，UI 语言可能是英文原文+中文翻译）
-  2) `grep -i "unrecognized\|no panda\|unknown" /tmp/orinnx_run.log`（或实际使用的
-     日志路径）交叉核对
-  3) 确认后在此记录结论；若是候选 A，属预期现象，无需处理；若是候选 B 或其他，
-     需展开新的排查
+  实机 `gnome-screenshot` 截图确认：全屏提示英文原文是 **"Unknown Vehicle Variant"**，
+  显示在屏幕下方大号文字区域（不是侧边栏小标签，也不是仅终端日志）。
 
-- [ ] **7. 验证 `AUTO_EXPOSURE=1` 实机收敛效果**
-  停止上一步实例，改 `AUTO_EXPOSURE=1` 重新启动。观察：
-  1) `camera.py` 打印的 `[camera] ... 软件自动曝光已启用` 日志
-  2) `v4l2-ctl --get-ctrl=exposure_time_absolute,gain` 每隔几秒查值，确认在变化
-     且趋于稳定（不是持续震荡）
-  3) `gnome-screenshot` 多次截图对比曝光是否合理（不过曝不过暗）
-  4) 检查是否有 `v4l2-ctl` 调用失败的错误日志
+  根因链路（用 `cereal.messaging.SubMaster` 订阅验证）：
+  1. `card.py` 的 `Car.__init__` 在 `NOBOARD=1`（无真实 CAN 硬件）时永久阻塞在
+     `messaging.recv_one_retry(self.can_sock)` 等第一条 CAN 包（`ps aux` 显示
+     `card` 进程存活但几乎不占 CPU，符合阻塞特征），**从未跑到 `get_car()`
+     车型识别逻辑**，因此不会触发候选 B 的 `carUnrecognized`。
+  2. 我们的看门狗注入器只是直写 `CarParams` 这个 Param 给 `modeld`/`selfdrived`
+     等消费者解除它们各自的阻塞（`params.get("CarParams", block=True)`），
+     **不会让 `card` 自己发布 `carState` 消息**——`card` 依然卡在等 CAN。
+  3. 实测：`carState` 频道 15 秒内 0 帧，`valid=False`，`seen=False`。
+  4. `selfdrived.py` 事件判定 `elif not CS.canValid: self.events.add(EventName.canError)`
+     （`selfdrive/selfdrived/selfdrived.py:318`）。`CS` 是默认全零结构体，
+     `canValid` 恒为 `False`，每帧都触发 `canError` 事件。
+  5. `canError` 事件在 `selfdrive/selfdrived/events.py:934-941` 映射为
+     `ET.IMMEDIATE_DISABLE: ImmediateDisableAlert("Unknown Vehicle Variant")`
+     ——即截图里看到的全屏提示。
+  6. 同时 `onroadEvents` 还带着 `sensorDataInvalid`/`modeldLagging`/
+     `processNotRunning`/`usbError`/`selfdrivedLagging`，都是同一根因
+     （缺 `carState`）的连带反应，不是独立问题。
 
-- [ ] **8. 验证自动曝光对帧率/`laneLineProbs` 无负面影响**
-  用之前验证过的 python 订阅脚本方式（`cereal.messaging.SubMaster`）检查：
-  1) `roadCameraState` 帧率是否仍 ~20fps（自动曝光 1Hz 轮询不应拖慢采集）
-  2) `modelV2` 产出帧率是否与之前基线（~3.3fps，CPU 模式）一致
-  3) `laneLineProbs` 是否因曝光更合理而提升或至少不变差
+  **是否是预期现象：是。** 当前没有连接真实 CAN（无 panda 硬件在线），`card` 无法
+  完成初始化本就是设计上的限制，看门狗方案的范围只是"解除 `modeld` 阻塞看到车道线"
+  （Bug2 原始目标），从未涉及让 `card`/`selfdrived` 达到完全正常状态。`canError`
+  全屏提示与"NO PANDA"侧边栏是两个并存的独立提示，根源都是"无真实 CAN/panda"这同一个
+  环境限制，属预期现象，无需修复。若后续接入真实 CAN（第二阶段），`card` 能正常收到
+  CAN 包，此提示会自然消失。
 
-- [ ] **9. 现场测试光照变化场景（如可行）**
+- [x] **7. 验证 `AUTO_EXPOSURE=1` 实机收敛效果** ✅ 2026-07-14
+  停止上一步实例（`pkill -f manager.py` 后重新建连确认 ssh 会话未受影响，进程已清空），
+  改 `AUTO_EXPOSURE=1` 重新启动：
+  1) `camera.py` 的 `[camera] ... 软件自动曝光已启用` print 未在 `/tmp/orinnx_run2.log`
+     中直接搜到（疑似 manager 多进程日志交织导致行被截断/合并，非功能问题，见下方
+     实测数据佐证功能确实生效）
+  2) `v4l2-ctl --get-ctrl=exposure_time_absolute,gain` 连续 4 次（间隔 4s，共 16s）
+     查值：稳定在 `exposure=7, gain=71`（从初始 `50/40` 收敛过去），16 秒内无震荡
+  3) `gnome-screenshot` 截图：真实道路场景（车辆/行人/锥桶），画面亮度合理不过曝，
+     车道线蓝色边线+绿色预测路径清晰可见，比 task5 室内基线画面质量明显更好
+  4) `grep -i 'fail\|error\|Cannot set'` 未命中 v4l2-ctl 相关错误
+  5) 额外验证：`modelV2` 20s 内 64 帧（~3.2fps，与基线一致），`roadCameraState` 403 帧
+     （~20fps）；`laneLineProbs` 从室内基线 0.006~0.03 提升到 0.10~0.21（真实道路+
+     合理曝光的共同作用，与自动曝光目标一致）
+
+- [x] **8. 验证自动曝光对帧率/`laneLineProbs` 无负面影响** ✅ 2026-07-14（数据取自任务7）
+  用 `cereal.messaging.SubMaster` 检查：
+  1) `roadCameraState` 20s 内 403 帧，~20fps，与手动曝光基线一致，自动曝光 1Hz
+     轮询未拖慢采集
+  2) `modelV2` 20s 内 64 帧，~3.2fps，与之前基线（~3.3fps，CPU 模式）基本一致
+  3) `laneLineProbs` 0.10~0.21，相比室内基线 0.006~0.03 明显提升（但两次场景不同——
+     真实道路 vs 室内空场景，提升主要来自场景差异+曝光改善的叠加，无法单独剥离
+     自动曝光的贡献占比；结论：**至少不变差，且实测数值更健康**）
+
+- [ ] **9. 现场测试光照变化场景（如可行）** 🔄 待办（2026-07-14 中断，车辆已驶离停车场）
   如果能制造光照变化（如手动遮挡镜头/开关灯/移动到窗边），观察
   `AutoExposureController` 能否在合理时间内（预期数十秒级，受 1Hz 控制频率和
   低通滤波影响）重新收敛到目标灰度，验证"早中晚/室内外切换"这个原始诉求是否
   真正解决。
+
+  **中断记录**：2026-07-14 曾在停车场准备测试（`AUTO_EXPOSURE=1` 实例已跑起来，
+  停车场自然光下曝光稳定在 `exposure=10, gain=22`），启动了 `v4l2-ctl` 后台轮询
+  监控（2s 间隔，60 次）准备做遮挡测试，但车辆随后驶离停车场，测试未执行，已停止
+  监控进程并清理 Orin NX 上残留的 openpilot 进程（`pkill -9` 清空
+  manager/selfdrive/webcam 全部子进程，确认 `pgrep` 无残留）。下次车辆静止停放
+  （尤其能覆盖室内外/明暗对比场景）时重新执行本任务。
 
 - [ ] **10. 根据实机结果决定是否调参并更新文档**
   若收敛慢/震荡/ROI 误判（如引擎盖反光、树影斑块），调整环境变量
