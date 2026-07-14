@@ -120,9 +120,20 @@
 
 **每一小步之间都跑一次 `check_panda_readonly.py`，全程不离手机/笔记本。**
 
-- [ ] **5. 上电前只读核实**
-  Orin NX 接 panda（USB），车辆钥匙还是 OFF：跑 `check_panda_readonly.py`，
-  确认默认态只读。
+- [x] **5. 上电前只读核实** ✅ 2026-07-15
+
+  J533 网关接线完成（用户已现场核对线序、接头卡到位），车辆钥匙 OFF：
+  - `check_panda_readonly.py`：`safety_mode=0(silent)`，`controls_allowed=0`，
+    退出码 0（完全静默）
+  - `panda.health()` 交叉核实：`voltage=12441mV`（12.4V，车辆已通过 harness 供电，
+    接线确认导通）、`ignition_line=0`（熄火状态，与实际钥匙位置一致，从硬件层面
+    独立验证了车辆状态，不只是听口头确认）、`ignition_can=0`、
+    `car_harness_status=1(normal)`、`fault_status=0`（无故障）
+  - `car_harness_status` 说明：查 `panda/board/drivers/harness.h` 源码确认，
+    `normal`/`flipped` 指 panda 与 harness 盒之间连接器的插入方向（类似 USB-C
+    双向可插），firmware 自动检测并适配两种方向的 GPIO 映射，**不是故障或安全
+    问题**，纯粹是这次插接方向与 [环境搭建与容器部署.md](../环境搭建与容器部署.md)
+    第七节记录的上次（`flipped`）不同，两种方向 panda 都能正确处理。
 
 - [ ] **6. 钥匙 ON（发动机不启动），观察 CAN 总线原始流量（不启动 openpilot）**
   用 `cabana` 或 `can_capture_daemon` 之类工具**只监听**，确认能收到 CAN 帧（说明
